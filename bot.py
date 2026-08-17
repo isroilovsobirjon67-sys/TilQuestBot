@@ -12,10 +12,8 @@ from telegram.ext import (
     ContextTypes
 )
 from deep_translator import GoogleTranslator
-import speech_recognition as sr
-from pydub import AudioSegment
 
-# --- HEALTH-CHECK SERVER ---
+# --- HEALTH-CHECK SERVER (Render uxlab qolmasligi uchun) ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -29,7 +27,7 @@ def run_health_check_server():
 
 threading.Thread(target=run_health_check_server, daemon=True).start()
 
-# --- SOZLAMALAR VA STATISTIKA ---
+# --- BOT SOZLAMALARI VA STATISTIKA ---
 ADMIN_ID = 6575497342
 USERS_FILE = "users.json"
 
@@ -74,8 +72,7 @@ def get_language_keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(update.effective_user.id)
     await update.message.reply_text(
-        "Salom! Men TilQuestBot'man.\n\n"
-        "Menga matn yoki ovozli xabar yuboring, men uni matnga o'girib, siz tanlagan tilga tarjima qilib beraman!"
+        "Salom! Men Tilchi bot'man.\n\nMenga xabar yuboring va men uni siz tanlagan tilga tarjima qilib beraman!"
     )
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -85,7 +82,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Sizda bu komandadan foydalanish huquqi yo'q.")
 
-# --- MATNLARNI QAYTA ISHLASH ---
+# --- MATNNI QAYTA ISHLASH ---
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(update.effective_user.id)
     context.user_data['pending_text'] = update.message.text
@@ -94,46 +91,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_language_keyboard()
     )
 
-# --- OVOZLI XABARLARNI QAYTA ISHLASH ---
-async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    save_user(user_id)
-    
-    msg = await update.message.reply_text("🎙 Ovozli xabar qayta ishlanmoqda...")
-    
-    ogg_path = f"voice_{user_id}.ogg"
-    wav_path = f"voice_{user_id}.wav"
-
-    try:
-        voice_file = await update.message.voice.get_file()
-        await voice_file.download_to_drive(ogg_path)
-
-        sound = AudioSegment.from_file(ogg_path)
-        sound.export(wav_path, format="wav")
-
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(wav_path) as source:
-            audio_data = recognizer.record(source)
-            text = recognizer.recognize_google(audio_data, language="uz-UZ")
-
-        context.user_data['pending_text'] = text
-        await msg.edit_text(
-            f"🗣 Asl matn:\n{text}\n\nQaysi tilga tarjima qilmoqchisiz?",
-            reply_markup=get_language_keyboard()
-        )
-
-    except sr.UnknownValueError:
-        await msg.edit_text("Ovozni aniqlab bo'lmadi. Iltimos, aniqroq gapirib qayta yuboring.")
-    except Exception:
-        await msg.edit_text("Ovozli xabarni qayta ishlashda xatolik yuz berdi.")
-    
-    finally:
-        if os.path.exists(ogg_path):
-            os.remove(ogg_path)
-        if os.path.exists(wav_path):
-            os.remove(wav_path)
-
-# --- TUGMA BOSILGANDA TARJIMA VA QAYTA SELEKTIYA ---
+# --- TUGMALAR BAZASI VA TARJIMA ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -141,10 +99,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "reselect_lang":
         text_to_translate = context.user_data.get('pending_text')
         if not text_to_translate:
-            await query.edit_message_text("Matn topilmadi. Iltimos, yangi matn yoki ovoz yuboring.")
+            await query.edit_message_text("Matn topilmadi. Iltimos, yangi matn yuboring.")
             return
         await query.edit_message_text(
-            f"🗣 Asl matn:\n{text_to_translate}\n\nQaysi tilga tarjima qilmoqchisiz?",
+            f"Asl matn:\n{text_to_translate}\n\nQaysi tilga tarjima qilmoqchisiz?",
             reply_markup=get_language_keyboard()
         )
         return
@@ -153,7 +111,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_to_translate = context.user_data.get('pending_text')
 
     if not text_to_translate:
-        await query.edit_message_text("Matn topilmadi. Iltimos, qayta yuboring.")
+        await query.edit_message_text("Matn topilmadi. Iltimos, matnni qayta yuboring.")
         return
 
     try:
@@ -165,8 +123,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         
         await query.edit_message_text(
-            f"🗣 Asl matn:\n{text_to_translate}\n\n"
-            f"🔤 Tarjima ({lang_name}):\n{translated}",
+            f"Asl matn:\n{text_to_translate}\n\n"
+            f"Tarjima ({lang_name}):\n{translated}",
             reply_markup=reselect_keyboard
         )
     except Exception:
@@ -181,9 +139,9 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
+    print("Tilchi bot ishga tushdi!")
     app.run_polling()
 
 if __name__ == '__main__':
