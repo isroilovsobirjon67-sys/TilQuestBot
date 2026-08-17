@@ -148,13 +148,23 @@ async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-      # Arab tili yoki boshqa tillar to'g'ri chiqishi uchun maxsus belgi (RTL mark)
-        rtl_mark = "\u200F"
+        # Agar arab tili tanlansa, RTL belgisi qo'shiladi, qolganlariga oddiy holatda chiqadi
+        if target_code == "ar":
+            rtl_mark = "\u200F"
+            message_text = (
+                f"{rtl_mark}🇸🇦 {names[target_code]} tiliga tarjima:\n\n"
+                f"{rtl_mark}📝 *Asl matn:* {text}\n\n"
+                f"{rtl_mark}✅ *Tarjima:* {translated}"
+            )
+        else:
+            message_text = (
+                f"🌐 {names[target_code]} tiliga tarjima:\n\n"
+                f"📝 *Asl matn:* {text}\n\n"
+                f"✅ *Tarjima:* {translated}"
+            )
 
         await query.edit_message_text(
-            f"{rtl_mark}🇸🇦 {names[target_code]} tiliga tarjima:\n\n"
-            f"{rtl_mark}📝 *Asl matn:* {text}\n\n"
-            f"{rtl_mark}✅ *Tarjima:* {translated}",
+            message_text,
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
