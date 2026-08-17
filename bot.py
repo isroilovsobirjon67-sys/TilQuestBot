@@ -66,7 +66,7 @@ async def translate_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- BOTNI ISHGA TUSHIRISH ---
 def main():
-    TOKEN = os.environ.get("BOT_TOKEN")
+    TOKEN = "8969508702:AAEKgHkuKPY2ipQuBXR_hYrNY-rqowNZSAk"  # <--- Shu qo'shtirnoq ichiga o'zingizning haqiqiy tokeningizni yozing
 
     app = ApplicationBuilder().token(TOKEN).build()
 
