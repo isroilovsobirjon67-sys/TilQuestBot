@@ -76,22 +76,27 @@ LANGUAGES_KEYBOARD = get_language_keyboard()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(update.effective_user.id)
     await update.message.reply_text(
-        "Salom! Men Tilchi bot'man.\n\nMenga xabar yuboring va men uni siz tanlagan tilga tarjima qilib beraman!",
-        reply_markup=LANGUAGES_KEYBOARD
+        "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
+        "✨ Menga istalgan matnni yuboring va men uni siz xohlagan tilga tez va sifatli tarjima qilib beraman! 🌍",
+        reply_markup=LANGUAGES_KEYBOARD,
+        parse_mode="Markdown"
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "ℹ️ **Yordam:**\n\nBortga istalgan matnni yuboring va kerakli tilni tanlang.",
+        "ℹ️ **Yordam markazi:**\n\n"
+        "💬 Menga istalgan matnni yuboring.\n"
+        "🔘 Chiqqan tugmalardan kerakli tilni tanlang.\n"
+        "🔄 Natijadan so'ng yana boshqa tilda tarjima qilishingiz mumkin!",
         parse_mode="Markdown"
     )
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id == ADMIN_ID:
         users = load_users()
-        await update.message.reply_text(f"📊 Bot statistikasi:\n\nJami foydalanuvchilar soni: {len(users)} ta")
+        await update.message.reply_text(f"📊 **Bot statistikasi:**\n\n👥 Jami foydalanuvchilar soni: **{len(users)}** ta", parse_mode="Markdown")
     else:
-        await update.message.reply_text("Sizda bu komandadan foydalanish huquqi yo'q.")
+        await update.message.reply_text("⚠️ Sizda bu komandadan foydalanish huquqi yo'q.")
 
 # --- MATNNI QAYTA ISHLASH ---
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -99,7 +104,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     context.user_data['text'] = text
     await update.message.reply_text(
-        "🌍 Qaysi tilga tarjima qilay?",
+        "🌐 Qaysi tilga tarjima qilay?",
         reply_markup=LANGUAGES_KEYBOARD
     )
 
@@ -129,7 +134,7 @@ async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [
                 InlineKeyboardButton(
-                    "🔄 Yana tarjima",
+                    "🔄 Yana tarjima qilish",
                     callback_data="again"
                 )
             ],
@@ -144,7 +149,7 @@ async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await query.edit_message_text(
-            f"🌍 {names[target_code]}\n\n"
+            f"{names[target_code]} tiliga tarjima:\n\n"
             f"📝 *Asl matn:* {text}\n\n"
             f"✅ *Tarjima:* {translated}",
             reply_markup=reply_markup,
@@ -153,7 +158,7 @@ async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         await query.edit_message_text(
-            "❌ Tarjima qilishda xatolik yuz berdi."
+            "❌ Tarjima qilishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring."
         )
         print("Xatolik:", e)
 
@@ -163,7 +168,7 @@ async def again(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     await query.edit_message_text(
-        "📝 Yangi so‘z yoki gapni yozing:"
+        "✍️ Yangi so‘z yoki matnni yuboring:"
     )
 
 
@@ -179,9 +184,9 @@ async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def post_init(application: Application):
     commands = [
-        BotCommand("start", "Botni qayta ishga tushirish"),
-        BotCommand("help", "Yordam va yo'riqnoma"),
-        BotCommand("stats", "Statistika"),
+        BotCommand("start", "Botni qayta ishga tushirish 🚀"),
+        BotCommand("help", "Yordam va yo'riqnoma ℹ️"),
+        BotCommand("stats", "Statistika 📊"),
     ]
     await application.bot.set_my_commands(commands)
 
@@ -224,7 +229,7 @@ def main():
         )
     )
 
-    print("🤖 Tilchi bot ishga tushdi!")
+    print("🤖 Tilchi bot muvaffaqiyatli ishga tushdi!")
     app.run_polling()
 
 
