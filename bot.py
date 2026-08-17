@@ -74,18 +74,14 @@ def get_language_keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(update.effective_user.id)
     await update.message.reply_text(
-        "Salom! Men **TilQuestBot**'man.\n\n"
-        "Menga matn yoki **ovozli xabar** yuboring, men uni matnga o'girib, siz tanlagan tilga tarjima qilib beraman!",
-        parse_mode="Markdown"
+        "Salom! Men TilQuestBot'man.\n\n"
+        "Menga matn yoki ovozli xabar yuboring, men uni matnga o'girib, siz tanlagan tilga tarjima qilib beraman!"
     )
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id == ADMIN_ID:
         users = load_users()
-        await update.message.reply_text(
-            f"📊 **Bot statistikasi:**\n\nJami foydalanuvchilar soni: **{len(users)}** ta",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text(f"📊 Bot statistikasi:\n\nJami foydalanuvchilar soni: {len(users)} ta")
     else:
         await update.message.reply_text("Sizda bu komandadan foydalanish huquqi yo'q.")
 
@@ -122,9 +118,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data['pending_text'] = text
         await msg.edit_text(
-            f"🗣 **Ovozdan olingan matn:**\n{text}\n\nQaysi tilga tarjima qilmoqchisiz?",
-            reply_markup=get_language_keyboard(),
-            parse_mode="Markdown"
+            f"🗣 Asl matn:\n{text}\n\nQaysi tilga tarjima qilmoqchisiz?",
+            reply_markup=get_language_keyboard()
         )
 
     except sr.UnknownValueError:
@@ -138,10 +133,21 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(wav_path):
             os.remove(wav_path)
 
-# --- TUGMA BOSILGANDA TARJIMA QILISH ---
+# --- TUGMA BOSILGANDA TARJIMA VA QAYTA SELEKTIYA ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
+    if query.data == "reselect_lang":
+        text_to_translate = context.user_data.get('pending_text')
+        if not text_to_translate:
+            await query.edit_message_text("Matn topilmadi. Iltimos, yangi matn yoki ovoz yuboring.")
+            return
+        await query.edit_message_text(
+            f"🗣 Asl matn:\n{text_to_translate}\n\nQaysi tilga tarjima qilmoqchisiz?",
+            reply_markup=get_language_keyboard()
+        )
+        return
 
     target_lang = query.data.replace("lang_", "")
     text_to_translate = context.user_data.get('pending_text')
@@ -154,10 +160,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         translated = GoogleTranslator(source='auto', target=target_lang).translate(text_to_translate)
         lang_name = LANGUAGES.get(target_lang, target_lang)
         
+        reselect_keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Boshqa tilga tarjima qilish", callback_data="reselect_lang")]
+        ])
+        
         await query.edit_message_text(
-            f"🗣 **Asl matn:**\n{text_to_translate}\n\n"
-            f"🔤 **Tarjima ({lang_name}):**\n{translated}",
-            parse_mode="Markdown"
+            f"🗣 Asl matn:\n{text_to_translate}\n\n"
+            f"🔤 Tarjima ({lang_name}):\n{translated}",
+            reply_markup=reselect_keyboard
         )
     except Exception:
         await query.edit_message_text("Tarjima qilishda xatolik yuz berdi.")
