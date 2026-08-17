@@ -66,7 +66,7 @@ async def translate_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- BOTNI ISHGA TUSHIRISH ---
 def main():
-    TOKEN = "8969508702:AAEKgHkuKPY2ipQuBXR_hYrNY-rqowNZSAk"  # <--- Shu qo'shtirnoq ichiga o'zingizning haqiqiy tokeningizni yozing
+    TOKEN = "8969508702:AAG1bUWvj-TnmdL_tMC_wb8iP6Iu7jfePZA"  # <--- Shu qo'shtirnoq ichiga o'zingizning haqiqiy tokeningizni yozing
 
     app = ApplicationBuilder().token(TOKEN).build()
 
