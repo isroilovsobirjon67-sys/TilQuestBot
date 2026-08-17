@@ -1,148 +1,129 @@
-import os
-import json
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    filters,
-    ContextTypes
-)
-from deep_translator import GoogleTranslator
+names = {
+        "uz": "🇺🇿 O‘zbekcha",
+        "en": "🇬🇧 English",
+        "ru": "🇷🇺 Русский",
+        "ko": "🇰🇷 한국어",
+        "tr": "🇹🇷 Türkçe",
+        "de": "🇩🇪 Deutsch",
+        "fr": "🇫🇷 Français",
+        "ar": "🇸🇦 العربية",
+        "zh-CN": "🇨🇳 中文"
+    }
 
-# --- HEALTH-CHECK SERVER (Render uxlab qolmasligi uchun) ---
-class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is alive!")
+    target_language = languages.get(query.data)
+    if not target_language:
+        await query.edit_message_text("❌ Noma'lum til tanlandi.")
+        return
 
-def run_health_check_server():
-    port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
-    server.serve_forever()
-
-threading.Thread(target=run_health_check_server, daemon=True).start()
-
-# --- BOT SOZLAMALARI VA STATISTIKA ---
-ADMIN_ID = 6575497342
-USERS_FILE = "users.json"
-
-LANGUAGES = {
-    "en": "🇬🇧 Ingliz",
-    "ru": "🇷🇺 Rus",
-    "uz": "🇺🇿 O'zbek",
-    "tr": "🇹🇷 Turk",
-    "de": "🇩🇪 Nemis",
-    "fr": "🇫🇷 Fransuz",
-    "es": "🇪🇸 Ispan",
-    "ar": "🇦🇪 Arab",
-    "zh-CN": "🇨🇳 Xitoy"
-}
-
-def load_users():
     try:
-        with open(USERS_FILE, "r") as f:
-            return set(json.load(f))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return set()
+        translated = GoogleTranslator(
+            source="auto",
+            target=target_language
+        ).translate(text)
 
-def save_user(user_id):
-    users = load_users()
-    if user_id not in users:
-        users.add(user_id)
-        with open(USERS_FILE, "w") as f:
-            json.dump(list(users), f)
-
-def get_language_keyboard():
-    keyboard = []
-    keys = list(LANGUAGES.keys())
-    for i in range(0, len(keys), 3):
-        row = [
-            InlineKeyboardButton(LANGUAGES[k], callback_data=f"lang_{k}")
-            for k in keys[i:i+3]
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "🔄 Yana tarjima",
+                    callback_data="again"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🌍 Tilni almashtirish",
+                    callback_data="change_language"
+                )
+            ]
         ]
-        keyboard.append(row)
-    return InlineKeyboardMarkup(keyboard)
 
-# --- KOMANDALAR ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    save_user(update.effective_user.id)
-    await update.message.reply_text(
-        "Salom! Men Tilchi bot'man.\n\nMenga xabar yuboring va men uni siz tanlagan tilga tarjima qilib beraman!"
-    )
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id == ADMIN_ID:
-        users = load_users()
-        await update.message.reply_text(f"📊 Bot statistikasi:\n\nJami foydalanuvchilar soni: {len(users)} ta")
-    else:
-        await update.message.reply_text("Sizda bu komandadan foydalanish huquqi yo'q.")
+        # Ikkita yulduzcha o'rniga bitta yulduzcha ishlatildi (*Asl matn:* va *Tarjima:*)
+        await query.edit_message_text(
+            f"🌍 {names[query.data]}\n\n"
+            f"📝 *Asl matn:* {text}\n\n"
+            f"✅ *Tarjima:* {translated}",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
 
-# --- MATNNI QAYTA ISHLASH ---
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    save_user(update.effective_user.id)
-    context.user_data['pending_text'] = update.message.text
-    await update.message.reply_text(
-        "Qaysi tilga tarjima qilmoqchisiz? Tilni tanlang:",
-        reply_markup=get_language_keyboard()
-    )
+    except Exception as e:
+        await query.edit_message_text(
+            "❌ Tarjima qilishda xatolik yuz berdi."
+        )
+        print("Xatolik:", e)
 
-# --- TUGMALAR BAZASI VA TARJIMA ---
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def again(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Yangi matn so'rash"""
     query = update.callback_query
     await query.answer()
 
-    if query.data == "reselect_lang":
-        text_to_translate = context.user_data.get('pending_text')
-        if not text_to_translate:
-            await query.edit_message_text("Matn topilmadi. Iltimos, yangi matn yuboring.")
-            return
-        await query.edit_message_text(
-            f"Asl matn:\n{text_to_translate}\n\nQaysi tilga tarjima qilmoqchisiz?",
-            reply_markup=get_language_keyboard()
-        )
-        return
+    await query.edit_message_text(
+        "📝 Yangi so‘z yoki gapni yozing:"
+    )
 
-    target_lang = query.data.replace("lang_", "")
-    text_to_translate = context.user_data.get('pending_text')
 
-    if not text_to_translate:
-        await query.edit_message_text("Matn topilmadi. Iltimos, matnni qayta yuboring.")
-        return
+async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tilni almashtirish tugmasi bosilganda"""
+    query = update.callback_query
+    await query.answer()
 
-    try:
-        translated = GoogleTranslator(source='auto', target=target_lang).translate(text_to_translate)
-        lang_name = LANGUAGES.get(target_lang, target_lang)
-        
-        reselect_keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔄 Boshqa tilga tarjima qilish", callback_data="reselect_lang")]
-        ])
-        
-        await query.edit_message_text(
-            f"Asl matn:\n{text_to_translate}\n\n"
-            f"Tarjima ({lang_name}):\n{translated}",
-            reply_markup=reselect_keyboard
-        )
-    except Exception:
-        await query.edit_message_text("Tarjima qilishda xatolik yuz berdi.")
+    await query.edit_message_text(
+        "🌍 Qaysi tilga tarjima qilay?",
+        reply_markup=LANGUAGES_KEYBOARD
+    )
 
-# --- BOTNI ISHGA TUSHIRISH ---
+
+async def post_init(application: Application):
+    """Telegram menyusiga buyruqlarni joylash"""
+    commands = [
+        BotCommand("start", "Botni qayta ishga tushirish"),
+        BotCommand("help", "Yordam va yo'riqnoma"),
+    ]
+    await application.bot.set_my_commands(commands)
+
+
 def main():
-    TOKEN = "8969508702:AAG1bUWvj-TnmdL_tMC_wb8iP6Iu7jfePZA"
+    app = Application.builder().token(TOKEN).post_init(post_init).build()
 
-    app = ApplicationBuilder().token(TOKEN).build()
-
+    # Buyruqlar (Commands)
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("stats", stats))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app.add_handler(CallbackQueryHandler(handle_callback))
+    app.add_handler(CommandHandler("help", help_command))
 
-    print("Tilchi bot ishga tushdi!")
+    # Matnli xabarlar
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            message_handler
+        )
+    )
+
+    # Callback handlers (Tugmalar uchun)
+    app.add_handler(
+        CallbackQueryHandler(
+            translate,
+            pattern="^(uz|en|ru|ko|tr|de|fr|ar|zh-CN)$"
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            again,
+            pattern="^again$"
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            change_language,
+            pattern="^change_language$"
+        )
+    )
+
+    print("🤖 Tilchi bot ishga tushdi!")
     app.run_polling()
 
-if __name__ == '__main__':
+
+if name == "main":
     main()
