@@ -28,7 +28,7 @@ from docx import Document
 
 
 # =========================================================
-# HEALTH-CHECK SERVER
+# HEALTH CHECK SERVER
 # =========================================================
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -63,8 +63,8 @@ threading.Thread(
 # SOZLAMALAR
 # =========================================================
 
-# GitHub/hosting Environment Variables ichidan olinadi
-TOKEN = os.environ.get("8969508702:AAG1bUWvj-TnmdL_tMC_wb8iP6Iu7jfePZA")
+# Render Environment Variables ichidan olinadi
+TOKEN = os.environ.get("BOT_TOKEN")
 
 ADMIN_ID = 6575497342
 
@@ -95,12 +95,10 @@ names = {
 def load_users():
 
     try:
-
         with open(USERS_FILE, "r", encoding="utf-8") as f:
             return set(json.load(f))
 
     except (FileNotFoundError, json.JSONDecodeError):
-
         return set()
 
 
@@ -157,14 +155,11 @@ async def start(
 
     await update.message.reply_text(
         "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
-
         "✨ Menga istalgan matnni, "
         "**.txt / .docx** faylni yoki "
         "📸 **rasmni** yuboring.\n\n"
-
         "🌍 Men rasm ichidagi matnni ham "
         "aniqlab, siz tanlagan tilga tarjima qilaman!",
-        
         reply_markup=LANGUAGES_KEYBOARD,
         parse_mode="Markdown"
     )
@@ -181,16 +176,12 @@ async def help_command(
 
     await update.message.reply_text(
         "ℹ️ **Yordam markazi:**\n\n"
-
         "💬 Matn yuboring.\n"
         "📄 `.txt` yoki `.docx` fayl yuboring.\n"
         "📸 Rasm yuboring.\n\n"
-
         "🔘 Keyin kerakli tilni tanlang.\n\n"
-
         "🤖 Rasm yuborsangiz, men rasm ichidagi "
         "matnni avtomatik aniqlayman va tarjima qilaman.",
-
         parse_mode="Markdown"
     )
 
@@ -212,14 +203,13 @@ async def stats(
             f"📊 **Bot statistikasi:**\n\n"
             f"👥 Jami foydalanuvchilar: "
             f"**{len(users)}** ta",
-
             parse_mode="Markdown"
         )
 
     else:
 
         await update.message.reply_text(
-            "⚠️ Sizda bu komandadan foydalanish huquqi yo'q."
+            "⚠️ Sizda bu komandadan foydalanish huquqi yo‘q."
         )
 
 
@@ -236,10 +226,10 @@ async def message_handler(
 
     text = update.message.text
 
+    if not text:
+        return
+
     context.user_data["text"] = text
-
-    context.user_data["file_path"] = None
-
     context.user_data["content_type"] = "text"
 
     await update.message.reply_text(
@@ -249,7 +239,7 @@ async def message_handler(
 
 
 # =========================================================
-# RASM TARJIMA FUNKSIYASI
+# RASM OCR
 # =========================================================
 
 async def photo_handler(
@@ -266,19 +256,23 @@ async def photo_handler(
 
     try:
 
-        # Eng yuqori sifatli rasmni olamiz
+        # Eng katta rasmni olish
         photo = update.message.photo[-1]
 
-        # Telegramdan faylni olamiz
-        file = await context.bot.get_file(photo.file_id)
+        # Telegramdan fayl olish
+        file = await context.bot.get_file(
+            photo.file_id
+        )
 
-        # Rasmni xotiraga yuklaymiz
+        # Rasmni xotiraga yuklash
         image_data = await file.download_as_bytearray()
 
-        # PIL orqali rasmni ochamiz
-        image = Image.open(BytesIO(image_data))
+        # PIL orqali ochish
+        image = Image.open(
+            BytesIO(image_data)
+        )
 
-        # Rasm ichidagi matnni aniqlaymiz
+        # OCR
         extracted_text = pytesseract.image_to_string(
             image,
             lang="eng+rus"
@@ -286,7 +280,7 @@ async def photo_handler(
 
         extracted_text = extracted_text.strip()
 
-        # Agar matn topilmasa
+        # Matn topilmasa
         if not extracted_text:
 
             await update.message.reply_text(
@@ -297,7 +291,7 @@ async def photo_handler(
 
             return
 
-        # Juda uzun OCR matnini cheklaymiz
+        # Juda uzun bo‘lsa
         if len(extracted_text) > 3000:
 
             extracted_text = (
@@ -305,18 +299,14 @@ async def photo_handler(
                 + "\n\n..."
             )
 
-        # Matnni vaqtincha saqlaymiz
         context.user_data["text"] = extracted_text
-
         context.user_data["content_type"] = "image"
 
-        # Foydalanuvchiga topilgan matnni ko'rsatamiz
         await update.message.reply_text(
             "✅ Rasm ichidagi matn aniqlandi!\n\n"
             "📝 **Topilgan matn:**\n\n"
             f"{extracted_text[:3500]}\n\n"
             "🌐 Endi qaysi tilga tarjima qilay?",
-            
             reply_markup=LANGUAGES_KEYBOARD,
             parse_mode="Markdown"
         )
@@ -332,7 +322,6 @@ async def photo_handler(
 
 
 # =========================================================
-# HUJJATLARNI QAYTA ISHLASH
 # TXT + DOCX
 # =========================================================
 
@@ -345,22 +334,20 @@ async def document_handler(
 
     doc_file = update.message.document
 
-    file_name = doc_file.file_name
+    file_name = doc_file.file_name or "file"
 
     file_name_lower = file_name.lower()
 
     # Faqat TXT va DOCX
     if not (
         file_name_lower.endswith(".txt")
-        or
-        file_name_lower.endswith(".docx")
+        or file_name_lower.endswith(".docx")
     ):
 
         await update.message.reply_text(
             "❌ Kechirasiz, hozircha faqat "
-            "**.txt** va **.docx** (Word) fayllarini "
+            "**.txt** va **.docx** fayllarini "
             "qabul qilaman.",
-            
             parse_mode="Markdown"
         )
 
@@ -368,7 +355,6 @@ async def document_handler(
 
     try:
 
-        # Faylni yuklab olish
         file = await context.bot.get_file(
             doc_file.file_id
         )
@@ -407,16 +393,13 @@ async def document_handler(
             doc = Document(local_path)
 
             extracted_text = "\n".join(
-                [
-                    p.text
-                    for p in doc.paragraphs
-                    if p.text.strip()
-                ]
+                p.text
+                for p in doc.paragraphs
+                if p.text.strip()
             )
 
-        # Faylni o'chiramiz
+        # Faylni o'chirish
         if os.path.exists(local_path):
-
             os.remove(local_path)
 
         # Matn yo'q
@@ -434,19 +417,15 @@ async def document_handler(
 
             extracted_text = (
                 extracted_text[:3000]
-                +
-                "\n\n...(Matn juda uzun "
-                "bo‘lgani uchun qisqartirildi)"
+                + "\n\n..."
             )
 
         context.user_data["text"] = extracted_text
-
         context.user_data["content_type"] = "document"
 
         await update.message.reply_text(
             f"📄 **Fayl qabul qilindi:** `{file_name}`\n\n"
             "🌐 Qaysi tilga tarjima qilay?",
-            
             reply_markup=LANGUAGES_KEYBOARD,
             parse_mode="Markdown"
         )
@@ -473,7 +452,6 @@ async def again(
 
     await query.answer()
 
-    # Eski ma'lumotlarni tozalaymiz
     context.user_data.pop("text", None)
     context.user_data.pop("content_type", None)
 
@@ -521,7 +499,6 @@ async def translate(
         "text"
     )
 
-    # Matn topilmasa
     if not text:
 
         await query.edit_message_text(
@@ -533,11 +510,7 @@ async def translate(
 
     target_code = query.data
 
-    target_language = names.get(
-        target_code
-    )
-
-    if not target_language:
+    if target_code not in names:
 
         await query.edit_message_text(
             "❌ Noma'lum til tanlandi."
@@ -547,13 +520,11 @@ async def translate(
 
     try:
 
-        # Tarjima
         translated = GoogleTranslator(
             source="auto",
             target=target_code
         ).translate(text)
 
-        # Tugmalar
         keyboard = [
 
             [
@@ -576,7 +547,6 @@ async def translate(
             keyboard
         )
 
-        # Kontent turiga qarab sarlavha
         if content_type == "image":
 
             source_title = "📸 Rasm ichidagi matn"
@@ -589,20 +559,18 @@ async def translate(
 
             source_title = "📝 Asl matn"
 
-        # Arab tili uchun RTL
+        # Arab tili
         if target_code == "ar":
 
-            rtl_mark = "\u200F"
+            rtl = "\u200F"
 
             message_text = (
-                f"{rtl_mark}🇸🇦 "
+                f"{rtl}🇸🇦 "
                 f"{names[target_code]} tiliga tarjima:\n\n"
-
-                f"{rtl_mark}{source_title}:\n"
-                f"{rtl_mark}{text[:500]}\n\n"
-
-                f"{rtl_mark}✅ **Tarjima:**\n"
-                f"{rtl_mark}{translated}"
+                f"{rtl}{source_title}:\n"
+                f"{rtl}{text[:500]}\n\n"
+                f"{rtl}✅ **Tarjima:**\n"
+                f"{rtl}{translated}"
             )
 
         else:
@@ -610,10 +578,8 @@ async def translate(
             message_text = (
                 f"🌐 **{names[target_code]} "
                 f"tiliga tarjima:**\n\n"
-
                 f"{source_title}:\n"
                 f"{text[:500]}\n\n"
-
                 f"✅ **Tarjima:**\n"
                 f"{translated}"
             )
@@ -657,7 +623,7 @@ async def post_init(
         BotCommand(
             "stats",
             "Statistika 📊"
-        ),
+        )
 
     ]
 
@@ -674,13 +640,10 @@ def main():
 
     if not TOKEN:
 
+        print("❌ BOT_TOKEN topilmadi!")
         print(
-            "❌ BOT_TOKEN topilmadi!"
-        )
-
-        print(
-            "Hosting Environment Variables "
-            "ichiga BOT_TOKEN qo‘shing."
+            "Render Environment Variables ichiga "
+            "BOT_TOKEN qo‘shing."
         )
 
         return
@@ -693,10 +656,7 @@ def main():
         .build()
     )
 
-    # -----------------------------
-    # KOMANDALAR
-    # -----------------------------
-
+    # START
     app.add_handler(
         CommandHandler(
             "start",
@@ -704,6 +664,7 @@ def main():
         )
     )
 
+    # HELP
     app.add_handler(
         CommandHandler(
             "help",
@@ -711,6 +672,7 @@ def main():
         )
     )
 
+    # STATS
     app.add_handler(
         CommandHandler(
             "stats",
@@ -718,10 +680,7 @@ def main():
         )
     )
 
-    # -----------------------------
     # RASM
-    # -----------------------------
-
     app.add_handler(
         MessageHandler(
             filters.PHOTO,
@@ -729,10 +688,7 @@ def main():
         )
     )
 
-    # -----------------------------
-    # HUJJATLAR
-    # -----------------------------
-
+    # HUJJAT
     app.add_handler(
         MessageHandler(
             filters.Document.ALL,
@@ -740,10 +696,7 @@ def main():
         )
     )
 
-    # -----------------------------
-    # ODDIY MATN
-    # -----------------------------
-
+    # MATN
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -751,10 +704,7 @@ def main():
         )
     )
 
-    # -----------------------------
-    # CALLBACK TUGMALARI
-    # -----------------------------
-
+    # YANA
     app.add_handler(
         CallbackQueryHandler(
             again,
@@ -762,6 +712,7 @@ def main():
         )
     )
 
+    # TIL ALMASHTIRISH
     app.add_handler(
         CallbackQueryHandler(
             change_language,
@@ -769,16 +720,13 @@ def main():
         )
     )
 
+    # TIL TANLASH
     app.add_handler(
         CallbackQueryHandler(
             translate,
             pattern="^(uz|en|ru|ko|tr|de|fr|ar|zh-CN)$"
         )
     )
-
-    # -----------------------------
-    # START
-    # -----------------------------
 
     print(
         "🤖 Tilchi bot muvaffaqiyatli ishga tushdi!"
