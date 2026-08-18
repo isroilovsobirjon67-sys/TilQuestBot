@@ -108,6 +108,20 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=LANGUAGES_KEYBOARD
     )
 
+# --- MAXSUS TUGMALAR (AGAIN VA CHANGE_LANGUAGE) ---
+async def again(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("✍️ Yangi so‘z yoki matnni yuboring:")
+
+async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text(
+        "🌍 Qaysi tilga tarjima qilay?",
+        reply_markup=LANGUAGES_KEYBOARD
+    )
+
 # --- TARJIMA QILISH ---
 async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -133,22 +147,16 @@ async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [
             [
-                InlineKeyboardButton(
-                    "🔄 Yana tarjima qilish",
-                    callback_data="again"
-                )
+                InlineKeyboardButton("🔄 Yana tarjima qilish", callback_data="again")
             ],
             [
-                InlineKeyboardButton(
-                    "🌍 Tilni almashtirish",
-                    callback_data="change_language"
-                )
+                InlineKeyboardButton("🌍 Tilni almashtirish", callback_data="change_language")
             ]
         ]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Agar arab tili tanlansa, RTL belgisi qo'shiladi, qolganlariga oddiy holatda chiqadi
+        # Agar arab tili tanlansa, RTL belgisi qo'shiladi
         if target_code == "ar":
             rtl_mark = "\u200F"
             message_text = (
@@ -176,25 +184,6 @@ async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("Xatolik:", e)
 
 
-async def again(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    await query.edit_message_text(
-        "✍️ Yangi so‘z yoki matnni yuboring:"
-    )
-
-
-async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    await query.edit_message_text(
-        "🌍 Qaysi tilga tarjima qilay?",
-        reply_markup=LANGUAGES_KEYBOARD
-    )
-
-
 async def post_init(application: Application):
     commands = [
         BotCommand("start", "Botni qayta ishga tushirish 🚀"),
@@ -220,25 +209,15 @@ def main():
         )
     )
 
-    # Callback handlers (Tugmalar uchun)
+    # MUHIM: Maxsus tugmalar handlerlari oldinda turishi kerak!
+    app.add_handler(CallbackQueryHandler(again, pattern="^again$"))
+    app.add_handler(CallbackQueryHandler(change_language, pattern="^change_language$"))
+
+    # Til kodlari uchun handler oxirida turadi
     app.add_handler(
         CallbackQueryHandler(
             translate,
             pattern="^(uz|en|ru|ko|tr|de|fr|ar|zh-CN)$"
-        )
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(
-            again,
-            pattern="^again$"
-        )
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(
-            change_language,
-            pattern="^change_language$"
         )
     )
 
