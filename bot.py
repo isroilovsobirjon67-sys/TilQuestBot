@@ -30,7 +30,8 @@ def run_health_check_server():
 threading.Thread(target=run_health_check_server, daemon=True).start()
 
 # --- SOZLAMALAR ---
-TOKEN = "8969508702:AAG1bUWvj-TnmdL_tMC_wb8iP6Iu7jfePZA"
+# Token hosting muhitidan olinadi (Xavfsiz usul)
+TOKEN = os.environ.get("BOT_TOKEN", "8969508702:AAG1bUWvj-TnmdL_tMC_wb8iP6Iu7jfePZA")
 ADMIN_ID = 6575497342
 USERS_FILE = "users.json"
 
@@ -117,7 +118,6 @@ async def document_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Faqat .txt va .docx formatlarini ruxsat beramiz
     if not (file_name.endswith('.txt') or file_name.endswith('.docx')):
-        # TO'G'RILANDI: Yulduzchalar olib tashlandi va parse_mode qo'shildi
         await update.message.reply_text(
             "❌ Kechirasiz, hozircha faqat **.txt** va **.docx** (Word) fayllarini qabul qilaman.",
             parse_mode="Markdown"
@@ -225,12 +225,6 @@ async def translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("Xatolik:", e)
 
 async def post_init(application: Application):
-    commands = [
-        BotCommand("start", "Botni qayta ishga tushirish 🚀"),
-        BotoCommand("help", "Yordam va yo'riqnoma ℹ️") if "BotoCommand" not in globals() else BotCommand("help", "Yordam va yo'riqnoma ℹ️"),
-        BotCommand("stats", "Statistika 📊"),
-    ]
-    # To'g'rilandi: yuqoridagi BotoCommand xatosi tuzatildi (BotCommand qilindi)
     commands = [
         BotCommand("start", "Botni qayta ishga tushirish 🚀"),
         BotCommand("help", "Yordam va yo'riqnoma ℹ️"),
