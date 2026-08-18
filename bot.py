@@ -64,7 +64,7 @@ threading.Thread(
 # =========================================================
 
 # GitHub/hosting Environment Variables ichidan olinadi
-TOKEN = os.environ.get("BOT_TOKEN")
+TOKEN = os.environ.get("8969508702:AAG1bUWvj-TnmdL_tMC_wb8iP6Iu7jfePZA")
 
 ADMIN_ID = 6575497342
 
