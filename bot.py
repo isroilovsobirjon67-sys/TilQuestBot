@@ -63,12 +63,13 @@ threading.Thread(
 # SOZLAMALAR
 # =========================================================
 
-# Render Environment Variables ichidan olinadi
 TOKEN = os.environ.get("BOT_TOKEN")
-
 ADMIN_ID = 6575497342
-
 USERS_FILE = "users.json"
+
+# ⚠️ USHBU YERGA O'Z KANALLARINGIZ USERNAME'INI YOZING (Masalan: "@kanal_username")
+# Eslatma: Bot ushbu kanallarda ADMIN bo'lishi shart!
+CHANNELS = ["@Sarvinoz_bakery"]
 
 
 # =========================================================
@@ -93,25 +94,57 @@ names = {
 # =========================================================
 
 def load_users():
-
     try:
         with open(USERS_FILE, "r", encoding="utf-8") as f:
             return set(json.load(f))
-
     except (FileNotFoundError, json.JSONDecodeError):
         return set()
 
 
 def save_user(user_id):
-
     users = load_users()
-
     if user_id not in users:
-
         users.add(user_id)
-
         with open(USERS_FILE, "w", encoding="utf-8") as f:
             json.dump(list(users), f)
+
+
+# =========================================================
+# MAJBURIY OBUNA TEKSHIRISH
+# =========================================================
+
+async def check_sub(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Foydalanuvchi barcha kanallarga obuna bo'lganini tekshiradi"""
+    if not CHANNELS:
+        return True
+
+    for channel in CHANNELS:
+        try:
+            member = await context.bot.get_chat_member(chat_id=channel, user_id=user_id)
+            if member.status in ["left", "kicked"]:
+                return False
+        except Exception as e:
+            print(f"Obuna tekshirishda xatolik ({channel}):", e)
+            return False
+    return True
+
+
+def get_sub_keyboard():
+    """Kanallar va tekshirish tugmasini hosil qiladi"""
+    keyboard = []
+    for i, channel in enumerate(CHANNELS, 1):
+        clean_username = channel.replace("@", "")
+        keyboard.append([
+            InlineKeyboardButton(
+                f"📢 {i}-kanalga a'zo bo'lish",
+                url=f"https://t.me/{clean_username}"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton("✅ Tekshirish", callback_data="check_subscription")
+    ])
+    return InlineKeyboardMarkup(keyboard)
 
 
 # =========================================================
@@ -119,13 +152,10 @@ def save_user(user_id):
 # =========================================================
 
 def get_language_keyboard():
-
     keyboard = []
-
     keys = list(names.keys())
 
     for i in range(0, len(keys), 3):
-
         row = [
             InlineKeyboardButton(
                 names[k],
@@ -133,7 +163,6 @@ def get_language_keyboard():
             )
             for k in keys[i:i + 3]
         ]
-
         keyboard.append(row)
 
     return InlineKeyboardMarkup(keyboard)
@@ -150,8 +179,17 @@ async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    user_id = update.effective_user.id
+    save_user(user_id)
 
-    save_user(update.effective_user.id)
+    # Obunani tekshirish
+    if not await check_sub(user_id, context):
+        await update.message.reply_text(
+            "⚠️ **Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling va Tekshirish tugmasini bosing:**",
+            reply_markup=get_sub_keyboard(),
+            parse_mode="Markdown"
+        )
+        return
 
     await update.message.reply_text(
         "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
@@ -166,6 +204,36 @@ async def start(
 
 
 # =========================================================
+# TEKSHIRISH TUGMASI CALLBACK
+# =========================================================
+
+async def check_subscription_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    if await check_sub(user_id, context):
+        await query.answer("✅ Obuna tasdiqlandi!", show_alert=True)
+        await query.message.delete()
+        
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
+                 "✨ Menga istalgan matnni, "
+                 "**.txt / .docx** faylni yoki "
+                 "📸 **rasmni** yuboring.\n\n"
+                 "🌍 Men rasm ichidagi matnni ham "
+                 "aniqlab, siz tanlagan tilga tarjima qilaman!",
+            reply_markup=LANGUAGES_KEYBOARD,
+            parse_mode="Markdown"
+        )
+    else:
+        await query.answer("❌ Hali barcha kanallarga a'zo bo'lmadingiz!", show_alert=True)
+
+
+# =========================================================
 # HELP
 # =========================================================
 
@@ -173,6 +241,13 @@ async def help_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    user_id = update.effective_user.id
+    if not await check_sub(user_id, context):
+        await update.message.reply_text(
+            "⚠️ Botdan foydalanish uchun avval kanallarga obuna bo'ling:",
+            reply_markup=get_sub_keyboard()
+        )
+        return
 
     await update.message.reply_text(
         "ℹ️ **Yordam markazi:**\n\n"
@@ -194,20 +269,15 @@ async def stats(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-
     if update.effective_user.id == ADMIN_ID:
-
         users = load_users()
-
         await update.message.reply_text(
             f"📊 **Bot statistikasi:**\n\n"
             f"👥 Jami foydalanuvchilar: "
             f"**{len(users)}** ta",
             parse_mode="Markdown"
         )
-
     else:
-
         await update.message.reply_text(
             "⚠️ Sizda bu komandadan foydalanish huquqi yo‘q."
         )
@@ -221,11 +291,18 @@ async def message_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    user_id = update.effective_user.id
+    save_user(user_id)
 
-    save_user(update.effective_user.id)
+    if not await check_sub(user_id, context):
+        await update.message.reply_text(
+            "⚠️ **Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling:**",
+            reply_markup=get_sub_keyboard(),
+            parse_mode="Markdown"
+        )
+        return
 
     text = update.message.text
-
     if not text:
         return
 
@@ -246,8 +323,16 @@ async def photo_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    user_id = update.effective_user.id
+    save_user(user_id)
 
-    save_user(update.effective_user.id)
+    if not await check_sub(user_id, context):
+        await update.message.reply_text(
+            "⚠️ **Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling:**",
+            reply_markup=get_sub_keyboard(),
+            parse_mode="Markdown"
+        )
+        return
 
     await update.message.reply_text(
         "📸 Rasm qabul qilindi.\n"
@@ -255,45 +340,26 @@ async def photo_handler(
     )
 
     try:
-
-        # Eng katta rasmni olish
         photo = update.message.photo[-1]
-
-        # Telegramdan fayl olish
-        file = await context.bot.get_file(
-            photo.file_id
-        )
-
-        # Rasmni xotiraga yuklash
+        file = await context.bot.get_file(photo.file_id)
         image_data = await file.download_as_bytearray()
+        image = Image.open(BytesIO(image_data))
 
-        # PIL orqali ochish
-        image = Image.open(
-            BytesIO(image_data)
-        )
-
-        # OCR
         extracted_text = pytesseract.image_to_string(
             image,
             lang="eng+rus"
         )
-
         extracted_text = extracted_text.strip()
 
-        # Matn topilmasa
         if not extracted_text:
-
             await update.message.reply_text(
                 "❌ Rasm ichidan matn topilmadi.\n\n"
                 "📸 Iltimos, matni aniqroq ko‘rinadigan "
                 "rasm yuboring."
             )
-
             return
 
-        # Juda uzun bo‘lsa
         if len(extracted_text) > 3000:
-
             extracted_text = (
                 extracted_text[:3000]
                 + "\n\n..."
@@ -312,9 +378,7 @@ async def photo_handler(
         )
 
     except Exception as e:
-
         print("Rasm OCR xatosi:", e)
-
         await update.message.reply_text(
             "❌ Rasmni o‘qishda xatolik yuz berdi.\n\n"
             "📸 Rasmni qaytadan yuborib ko‘ring."
@@ -329,92 +393,66 @@ async def document_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    user_id = update.effective_user.id
+    save_user(user_id)
 
-    save_user(update.effective_user.id)
+    if not await check_sub(user_id, context):
+        await update.message.reply_text(
+            "⚠️ **Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling:**",
+            reply_markup=get_sub_keyboard(),
+            parse_mode="Markdown"
+        )
+        return
 
     doc_file = update.message.document
-
     file_name = doc_file.file_name or "file"
-
     file_name_lower = file_name.lower()
 
-    # Faqat TXT va DOCX
     if not (
         file_name_lower.endswith(".txt")
         or file_name_lower.endswith(".docx")
     ):
-
         await update.message.reply_text(
             "❌ Kechirasiz, hozircha faqat "
             "**.txt** va **.docx** fayllarini "
             "qabul qilaman.",
             parse_mode="Markdown"
         )
-
         return
 
     try:
+        file = await context.bot.get_file(doc_file.file_id)
+        os.makedirs("downloads", exist_ok=True)
+        local_path = os.path.join("downloads", file_name)
 
-        file = await context.bot.get_file(
-            doc_file.file_id
-        )
-
-        os.makedirs(
-            "downloads",
-            exist_ok=True
-        )
-
-        local_path = os.path.join(
-            "downloads",
-            file_name
-        )
-
-        await file.download_to_drive(
-            local_path
-        )
-
+        await file.download_to_drive(local_path)
         extracted_text = ""
 
-        # TXT
         if file_name_lower.endswith(".txt"):
-
             with open(
                 local_path,
                 "r",
                 encoding="utf-8",
                 errors="ignore"
             ) as f:
-
                 extracted_text = f.read()
 
-        # DOCX
         elif file_name_lower.endswith(".docx"):
-
             doc = Document(local_path)
-
             extracted_text = "\n".join(
-                p.text
-                for p in doc.paragraphs
-                if p.text.strip()
+                p.text for p in doc.paragraphs if p.text.strip()
             )
 
-        # Faylni o'chirish
         if os.path.exists(local_path):
             os.remove(local_path)
 
-        # Matn yo'q
         if not extracted_text.strip():
-
             await update.message.reply_text(
-                "❌ Fayl ichida tarjima qilish "
-                "uchun matn topilmadi."
+                "❌ Fayl ichida tarjima qilish uchun matn topilmadi."
             )
-
             return
 
-        # 3000 belgigacha
         if len(extracted_text) > 3000:
-
             extracted_text = (
                 extracted_text[:3000]
                 + "\n\n..."
@@ -431,9 +469,7 @@ async def document_handler(
         )
 
     except Exception as e:
-
         print("Fayl xatosi:", e)
-
         await update.message.reply_text(
             "❌ Faylni qayta ishlashda xatolik yuz berdi."
         )
@@ -447,9 +483,7 @@ async def again(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-
     query = update.callback_query
-
     await query.answer()
 
     context.user_data.pop("text", None)
@@ -468,9 +502,7 @@ async def change_language(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-
     query = update.callback_query
-
     await query.answer()
 
     await query.edit_message_text(
@@ -487,97 +519,67 @@ async def translate(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-
     query = update.callback_query
-
     await query.answer()
 
     text = context.user_data.get("text")
-
-    content_type = context.user_data.get(
-        "content_type",
-        "text"
-    )
+    content_type = context.user_data.get("content_type", "text")
 
     if not text:
-
         await query.edit_message_text(
             "❌ Matn topilmadi.\n\n"
             "Iltimos, yangi matn, fayl yoki rasm yuboring."
         )
-
         return
 
     target_code = query.data
 
     if target_code not in names:
-
-        await query.edit_message_text(
-            "❌ Noma'lum til tanlandi."
-        )
-
+        await query.edit_message_text("❌ Noma'lum til tanlandi.")
         return
 
     try:
-
         translated = GoogleTranslator(
             source="auto",
             target=target_code
         ).translate(text)
 
         keyboard = [
-
             [
                 InlineKeyboardButton(
                     "🔄 Yana tarjima qilish",
                     callback_data="again"
                 )
             ],
-
             [
                 InlineKeyboardButton(
                     "🌍 Tilni almashtirish",
                     callback_data="change_language"
                 )
             ]
-
         ]
 
-        reply_markup = InlineKeyboardMarkup(
-            keyboard
-        )
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
         if content_type == "image":
-
             source_title = "📸 Rasm ichidagi matn"
-
         elif content_type == "document":
-
             source_title = "📄 Fayldagi matn"
-
         else:
-
             source_title = "📝 Asl matn"
 
-        # Arab tili
         if target_code == "ar":
-
             rtl = "\u200F"
-
             message_text = (
-                f"{rtl}🇸🇦 "
-                f"{names[target_code]} tiliga tarjima:\n\n"
+                f"{rtl}🇸🇦 {names[target_code]} tiliga tarjima:\n\n"
                 f"{rtl}{source_title}:\n"
                 f"{rtl}{text[:500]}\n\n"
                 f"{rtl}✅ **Tarjima:**\n"
                 f"{rtl}{translated}"
             )
-
         else:
-
             message_text = (
-                f"🌐 **{names[target_code]} "
-                f"tiliga tarjima:**\n\n"
+                f"🌐 **{names[target_code]} tiliga tarjima:**\n\n"
                 f"{source_title}:\n"
                 f"{text[:500]}\n\n"
                 f"✅ **Tarjima:**\n"
@@ -591,9 +593,7 @@ async def translate(
         )
 
     except Exception as e:
-
         print("Tarjima xatosi:", e)
-
         await query.edit_message_text(
             "❌ Tarjima qilishda xatolik yuz berdi.\n\n"
             "Iltimos, qaytadan urinib ko‘ring."
@@ -604,32 +604,13 @@ async def translate(
 # BOT KOMANDALARI
 # =========================================================
 
-async def post_init(
-    application: Application
-):
-
+async def post_init(application: Application):
     commands = [
-
-        BotCommand(
-            "start",
-            "Botni qayta ishga tushirish 🚀"
-        ),
-
-        BotCommand(
-            "help",
-            "Yordam va yo‘riqnoma ℹ️"
-        ),
-
-        BotCommand(
-            "stats",
-            "Statistika 📊"
-        )
-
+        BotCommand("start", "Botni qayta ishga tushirish 🚀"),
+        BotCommand("help", "Yordam va yo‘riqnoma ℹ️"),
+        BotCommand("stats", "Statistika 📊")
     ]
-
-    await application.bot.set_my_commands(
-        commands
-    )
+    await application.bot.set_my_commands(commands)
 
 
 # =========================================================
@@ -637,15 +618,9 @@ async def post_init(
 # =========================================================
 
 def main():
-
     if not TOKEN:
-
         print("❌ BOT_TOKEN topilmadi!")
-        print(
-            "Render Environment Variables ichiga "
-            "BOT_TOKEN qo‘shing."
-        )
-
+        print("Render Environment Variables ichiga BOT_TOKEN qo‘shing.")
         return
 
     app = (
@@ -656,82 +631,42 @@ def main():
         .build()
     )
 
-    # START
+    # MAJBURIY OBUNA CALLBACK HANDLER
     app.add_handler(
-        CommandHandler(
-            "start",
-            start
+        CallbackQueryHandler(
+            check_subscription_callback,
+            pattern="^check_subscription$"
         )
     )
+
+    # START
+    app.add_handler(CommandHandler("start", start))
 
     # HELP
-    app.add_handler(
-        CommandHandler(
-            "help",
-            help_command
-        )
-    )
+    app.add_handler(CommandHandler("help", help_command))
 
     # STATS
-    app.add_handler(
-        CommandHandler(
-            "stats",
-            stats
-        )
-    )
+    app.add_handler(CommandHandler("stats", stats))
 
     # RASM
-    app.add_handler(
-        MessageHandler(
-            filters.PHOTO,
-            photo_handler
-        )
-    )
+    app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
 
     # HUJJAT
-    app.add_handler(
-        MessageHandler(
-            filters.Document.ALL,
-            document_handler
-        )
-    )
+    app.add_handler(MessageHandler(filters.Document.ALL, document_handler))
 
     # MATN
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            message_handler
-        )
-    )
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 
     # YANA
-    app.add_handler(
-        CallbackQueryHandler(
-            again,
-            pattern="^again$"
-        )
-    )
+    app.add_handler(CallbackQueryHandler(again, pattern="^again$"))
 
     # TIL ALMASHTIRISH
-    app.add_handler(
-        CallbackQueryHandler(
-            change_language,
-            pattern="^change_language$"
-        )
-    )
+    app.add_handler(CallbackQueryHandler(change_language, pattern="^change_language$"))
 
     # TIL TANLASH
-    app.add_handler(
-        CallbackQueryHandler(
-            translate,
-            pattern="^(uz|en|ru|ko|tr|de|fr|ar|zh-CN)$"
-        )
-    )
+    app.add_handler(CallbackQueryHandler(translate, pattern="^(uz|en|ru|ko|tr|de|fr|ar|zh-CN)$"))
 
-    print(
-        "🤖 Tilchi bot muvaffaqiyatli ishga tushdi!"
-    )
-
+    print("🤖 Tilchi bot muvaffaqiyatli ishga tushdi!")
     app.run_polling()
 
 
