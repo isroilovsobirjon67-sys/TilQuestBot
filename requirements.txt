@@ -1,6 +1,6 @@
-aiohttp
-python-telegram-bot
-pytesseract
-Pillow
-deep-translator
-python-docx
+python-telegram-bot==22.8
+deep-translator==1.11.4
+pytesseract==0.3.13
+Pillow==12.3.0
+python-docx==1.2.0
+aiohttp==3.14.3
