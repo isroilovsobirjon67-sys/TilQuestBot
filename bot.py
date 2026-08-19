@@ -1,8 +1,7 @@
 import os
 import json
-import threading
 from io import BytesIO
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from aiohttp import web
 
 import pytesseract
 from PIL import Image
@@ -28,35 +27,24 @@ from docx import Document
 
 
 # =========================================================
-# HEALTH CHECK SERVER
+# HEALTH CHECK SERVER (Render 503 xatosini oldini olish uchun)
 # =========================================================
 
-class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+async def handle_ping(request):
+    return web.Response(text="Bot is alive!", status=200)
 
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is alive!")
-
-    def log_message(self, format, *args):
-        return
-
-
-def run_health_check_server():
+async def start_health_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    app.router.add_get("/health", handle_ping)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
     port = int(os.environ.get("PORT", 10000))
-
-    server = HTTPServer(
-        ("0.0.0.0", port),
-        SimpleHTTPRequestHandler
-    )
-
-    server.serve_forever()
-
-
-threading.Thread(
-    target=run_health_check_server,
-    daemon=True
-).start()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"🌐 Health-check server {port}-portda ishga tushdi!")
 
 
 # =========================================================
@@ -67,8 +55,6 @@ TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 6575497342
 USERS_FILE = "users.json"
 
-# ⚠️ USHBU YERGA O'Z KANALLARINGIZ USERNAME'INI YOZING (Masalan: "@kanal_username")
-# Eslatma: Bot ushbu kanallarda ADMIN bo'lishi shart!
 CHANNELS = ["@Sarvinoz_bakery"]
 
 
@@ -114,7 +100,6 @@ def save_user(user_id):
 # =========================================================
 
 async def check_sub(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Foydalanuvchi barcha kanallarga obuna bo'lganini tekshiradi"""
     if not CHANNELS:
         return True
 
@@ -130,7 +115,6 @@ async def check_sub(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
 
 
 def get_sub_keyboard():
-    """Kanallar va tekshirish tugmasini hosil qiladi"""
     keyboard = []
     for i, channel in enumerate(CHANNELS, 1):
         clean_username = channel.replace("@", "")
@@ -182,7 +166,6 @@ async def start(
     user_id = update.effective_user.id
     save_user(user_id)
 
-    # Obunani tekshirish
     if not await check_sub(user_id, context):
         await update.message.reply_text(
             "⚠️ **Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling va Tekshirish tugmasini bosing:**",
@@ -601,10 +584,13 @@ async def translate(
 
 
 # =========================================================
-# BOT KOMANDALARI
+# BOT KOMANDALARI VA SERVER
 # =========================================================
 
 async def post_init(application: Application):
+    # Web serverni bot bilan birga ishga tushirish
+    await start_health_server()
+    
     commands = [
         BotCommand("start", "Botni qayta ishga tushirish 🚀"),
         BotCommand("help", "Yordam va yo‘riqnoma ℹ️"),
