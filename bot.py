@@ -1,98 +1,96 @@
-import os
+from io import BytesIO
 import logging
-import pytesseract
-from PIL import Image
+import os
 from deep_translator import GoogleTranslator
-from aiohttp import web
+from PIL import Image
+import pytesseract
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
-# Logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Logging sozlamalari
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
 
+# Tokenni muhit o'zgaruvchisidan olish
 TOKEN = os.getenv("BOT_TOKEN")
-PORT = int(os.environ.get("PORT", 8080))
 
-# Web Server
-async def handle_health_check(request):
-    return web.Response(text="Bot is live and running!")
 
-async def start_web_server():
-    app = web.Application()
-    app.router.add_get('/', handle_health_check)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
-    await site.start()
-
-# /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+# /start buyrug'i uchun handler
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        f"Assalomu alaykum, {user.first_name}!\n\n"
-        "Botga xush kelibsiz! Rasmdagi matnlarni ajratish (OCR) va tarjima qilish uchun rasmni yuboring."
+        "Xush kelibsiz! Menga matnli rasm yoki istalgan matn yuboring, "
+        "men uni o'zbek tiliga tarjima qilib beraman. 🚀"
     )
 
-# Rasmga ishlov berish
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    status_msg = await update.message.reply_text("⏳ Rasm qabul qilindi. Matn o'qilmoqda...")
-    photo_path = "temp_image.jpg"
-    
+
+# Oddiy matn xabarlarini tarjima qilish
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
     try:
-        # Rasm faylini olish (Photo yoki Document bo'lishidan qat'i nazar)
-        if update.message.photo:
-            file_id = update.message.photo[-1].file_id
-        elif update.message.document and update.message.document.mime_type.startswith('image/'):
-            file_id = update.message.document.file_id
-        else:
-            await status_msg.edit_text("Iltimos, faqat rasm formatidagi fayl yuboring.")
-            return
-
-        photo_file = await context.bot.get_file(file_id)
-        await photo_file.download_to_drive(photo_path)
-
-        # PyTesseract OCR
-        image = Image.open(photo_path)
-        extracted_text = pytesseract.image_to_string(image, lang='eng+rus') # eng va rus tillari
-
-        if os.path.exists(photo_path):
-            os.remove(photo_path)
-
-        if not extracted_text.strip():
-            await status_msg.edit_text("❌ Rasmda hech qanday matn topilmadi.")
-            return
-
-        # Tarjima
-        translated_text = GoogleTranslator(source='auto', target='uz').translate(extracted_text.strip())
-
-        response_message = (
-            f"📝 **Aniqlangan matn:**\n`{extracted_text.strip()}`\n\n"
-            f"🌐 **Tarjimasi (O'zbekcha):**\n`{translated_text}`"
+        translated = GoogleTranslator(source="auto", target="uz").translate(
+            text
         )
-        await status_msg.edit_text(response_message, parse_mode='Markdown')
-
+        await update.message.reply_text(f"🌐 Tarjimasi (O'zbekcha):\n{translated}")
     except Exception as e:
-        logging.error(f"Xatolik yuz berdi: {e}")
-        if os.path.exists(photo_path):
-            os.remove(photo_path)
-        await status_msg.edit_text(f"⚠️ Xatolik yuz berdi: {e}")
+        await update.message.reply_text(
+            f"❌ Tarjimada xatolik yuz berdi: {str(e)}"
+        )
 
-async def post_init(application: Application):
-    await start_web_server()
+
+# Rasmlarni (OCR) o'qib tarjima qilish
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        photo_file = await update.message.photo[-1].get_file()
+        photo_bytes = await photo_file.download_as_bytearray()
+
+        image = Image.open(BytesIO(photo_bytes))
+        extracted_text = pytesseract.image_to_string(
+            image, lang="eng+rus"
+        ).strip()
+
+        if not extracted_text:
+            await update.message.reply_text(
+                "❌ Rasmdan hech qanday matn aniqlanmadi."
+            )
+            return
+
+        translated = GoogleTranslator(source="auto", target="uz").translate(
+            extracted_text
+        )
+
+        response_text = (
+            f"📝 Aniqlangan matn:\n`{extracted_text}`\n\n"
+            f"🌐 Tarjimasi (O'zbekcha):\n{translated}"
+        )
+        await update.message.reply_text(response_text, parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Xatolik yuz berdi: {str(e)}")
+
 
 def main():
     if not TOKEN:
-        print("XATOLIK: BOT_TOKEN topilmadi!")
-        return
+        raise ValueError("BOT_TOKEN muhit o'zgaruvchisi topilmadi!")
 
-    app = Application.builder().token(TOKEN).post_init(post_init).build()
+    app = Application.builder().token(TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    # Har qanday rasm yoki rasm-faylni ushlab olish handler'i
-    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_photo))
-    
+    # Handlerlarni ro'yxatdan o'tkazish
+    app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text)
+    )
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+
     print("Bot muvaffaqiyatli ishga tushdi...")
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling()
+
 
 if __name__ == "__main__":
     main()
