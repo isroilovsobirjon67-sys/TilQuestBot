@@ -23,7 +23,7 @@ from telegram.ext import (
     ContextTypes
 )
 
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator, MyMemoryTranslator
 from docx import Document
 
 
@@ -440,10 +440,50 @@ async def translate(
         return
 
     try:
-        translated = GoogleTranslator(
-            source="auto",
-            target=target_code
-        ).translate(text)
+        translated = None
+
+        def is_bad_result(result):
+            return (
+                result is None
+                or "Error 500" in result
+                or "Server Error" in result
+                or "That's an error" in result
+                or len(result.strip()) == 0
+            )
+
+        # 1-urinish: Google Translate
+        try:
+            result = GoogleTranslator(
+                source="auto",
+                target=target_code
+            ).translate(text)
+
+            if not is_bad_result(result):
+                translated = result
+        except Exception as e:
+            print("GoogleTranslator xatosi:", e)
+
+        # 2-urinish: agar Google ishlamasa, MyMemory xizmatiga o'tamiz
+        if translated is None:
+            try:
+                mymemory_code = target_code.split("-")[0]
+                result = MyMemoryTranslator(
+                    source="auto",
+                    target=mymemory_code
+                ).translate(text)
+
+                if not is_bad_result(result):
+                    translated = result
+            except Exception as e:
+                print("MyMemoryTranslator xatosi:", e)
+
+        if translated is None:
+            await query.edit_message_text(
+                "❌ Tarjima xizmatlari hozir javob bermayapti.\n\n"
+                "Iltimos, bir necha daqiqadan so‘ng qaytadan "
+                "urinib ko‘ring."
+            )
+            return
 
         keyboard = [
             [
