@@ -3,17 +3,17 @@ import json
 import threading
 from io import BytesIO
 from http.server import HTTPServer, BaseHTTPRequestHandler
-
+ 
 import pytesseract
 from PIL import Image
-
+ 
 from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     BotCommand
 )
-
+ 
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -22,56 +22,56 @@ from telegram.ext import (
     filters,
     ContextTypes
 )
-
+ 
 from deep_translator import GoogleTranslator
 from docx import Document
-
-
+ 
+ 
 # =========================================================
 # HEALTH CHECK SERVER
 # =========================================================
-
+ 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-
+ 
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"Bot is alive!")
-
+ 
     def log_message(self, format, *args):
         return
-
-
+ 
+ 
 def run_health_check_server():
     port = int(os.environ.get("PORT", 10000))
-
+ 
     server = HTTPServer(
         ("0.0.0.0", port),
         SimpleHTTPRequestHandler
     )
-
+ 
     server.serve_forever()
-
-
+ 
+ 
 threading.Thread(
     target=run_health_check_server,
     daemon=True
 ).start()
-
-
+ 
+ 
 # =========================================================
 # SOZLAMALAR
 # =========================================================
-
+ 
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 6575497342
 USERS_FILE = "users.json"
-
-
+ 
+ 
 # =========================================================
 # TILLAR
 # =========================================================
-
+ 
 names = {
     "uz": "🇺🇿 O‘zbekcha",
     "en": "🇬🇧 English",
@@ -83,36 +83,43 @@ names = {
     "ar": "🇸🇦 العربية",
     "zh-CN": "🇨🇳 中文"
 }
-
-
+ 
+ 
 # =========================================================
 # FOYDALANUVCHILAR
+#
+# ESLATMA: Render bepul tarifida disk vaqtinchalik (ephemeral),
+# ya'ni bot qayta ishga tushganda (deploy/restart) bu fayl
+# o'chib ketishi mumkin va statistika reset bo'ladi.
+# Buni butunlay hal qilish uchun tashqi baza (masalan bepul
+# Supabase/PostgreSQL) kerak bo'ladi — xohlasangiz shuni ham
+# alohida sozlab beraman.
 # =========================================================
-
+ 
 def load_users():
     try:
         with open(USERS_FILE, "r", encoding="utf-8") as f:
             return set(json.load(f))
     except (FileNotFoundError, json.JSONDecodeError):
         return set()
-
-
+ 
+ 
 def save_user(user_id):
     users = load_users()
     if user_id not in users:
         users.add(user_id)
         with open(USERS_FILE, "w", encoding="utf-8") as f:
             json.dump(list(users), f)
-
-
+ 
+ 
 # =========================================================
 # TIL TUGMALARI
 # =========================================================
-
+ 
 def get_language_keyboard():
     keyboard = []
     keys = list(names.keys())
-
+ 
     for i in range(0, len(keys), 3):
         row = [
             InlineKeyboardButton(
@@ -122,24 +129,24 @@ def get_language_keyboard():
             for k in keys[i:i + 3]
         ]
         keyboard.append(row)
-
+ 
     return InlineKeyboardMarkup(keyboard)
-
-
+ 
+ 
 LANGUAGES_KEYBOARD = get_language_keyboard()
-
-
+ 
+ 
 # =========================================================
 # START
 # =========================================================
-
+ 
 async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
     user_id = update.effective_user.id
     save_user(user_id)
-
+ 
     await update.message.reply_text(
         "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
         "✨ Menga istalgan matnni, "
@@ -150,12 +157,12 @@ async def start(
         reply_markup=LANGUAGES_KEYBOARD,
         parse_mode="Markdown"
     )
-
-
+ 
+ 
 # =========================================================
 # HELP
 # =========================================================
-
+ 
 async def help_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -170,12 +177,12 @@ async def help_command(
         "matnni avtomatik aniqlayman va tarjima qilaman.",
         parse_mode="Markdown"
     )
-
-
+ 
+ 
 # =========================================================
 # STATISTIKA
 # =========================================================
-
+ 
 async def stats(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -192,60 +199,60 @@ async def stats(
         await update.message.reply_text(
             "⚠️ Sizda bu komandadan foydalanish huquqi yo‘q."
         )
-
-
+ 
+ 
 # =========================================================
 # ODDIY MATN
 # =========================================================
-
+ 
 async def message_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
     user_id = update.effective_user.id
     save_user(user_id)
-
+ 
     text = update.message.text
     if not text:
         return
-
+ 
     context.user_data["text"] = text
     context.user_data["content_type"] = "text"
-
+ 
     await update.message.reply_text(
         "🌐 Qaysi tilga tarjima qilay?",
         reply_markup=LANGUAGES_KEYBOARD
     )
-
-
+ 
+ 
 # =========================================================
 # RASM OCR
 # =========================================================
-
+ 
 async def photo_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
     user_id = update.effective_user.id
     save_user(user_id)
-
+ 
     await update.message.reply_text(
         "📸 Rasm qabul qilindi.\n"
         "🔍 Rasm ichidagi matn aniqlanmoqda..."
     )
-
+ 
     try:
         photo = update.message.photo[-1]
         file = await context.bot.get_file(photo.file_id)
         image_data = await file.download_as_bytearray()
         image = Image.open(BytesIO(image_data))
-
+ 
         extracted_text = pytesseract.image_to_string(
             image,
             lang="eng+rus"
         )
         extracted_text = extracted_text.strip()
-
+ 
         if not extracted_text:
             await update.message.reply_text(
                 "❌ Rasm ichidan matn topilmadi.\n\n"
@@ -253,16 +260,16 @@ async def photo_handler(
                 "rasm yuboring."
             )
             return
-
+ 
         if len(extracted_text) > 3000:
             extracted_text = (
                 extracted_text[:3000]
                 + "\n\n..."
             )
-
+ 
         context.user_data["text"] = extracted_text
         context.user_data["content_type"] = "image"
-
+ 
         await update.message.reply_text(
             "✅ Rasm ichidagi matn aniqlandi!\n\n"
             "📝 **Topilgan matn:**\n\n"
@@ -271,30 +278,37 @@ async def photo_handler(
             reply_markup=LANGUAGES_KEYBOARD,
             parse_mode="Markdown"
         )
-
+ 
+    except pytesseract.TesseractNotFoundError:
+        print("Tesseract topilmadi — Aptfile orqali o'rnatilganini tekshiring.")
+        await update.message.reply_text(
+            "❌ Rasmdan matn olish xizmati hozircha ishlamayapti.\n\n"
+            "Iltimos, keyinroq qayta urinib ko‘ring yoki matn/fayl yuboring."
+        )
+ 
     except Exception as e:
         print("Rasm OCR xatosi:", e)
         await update.message.reply_text(
             "❌ Rasmni o‘qishda xatolik yuz berdi.\n\n"
             "📸 Rasmni qaytadan yuborib ko‘ring."
         )
-
-
+ 
+ 
 # =========================================================
 # TXT + DOCX
 # =========================================================
-
+ 
 async def document_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
     user_id = update.effective_user.id
     save_user(user_id)
-
+ 
     doc_file = update.message.document
     file_name = doc_file.file_name or "file"
     file_name_lower = file_name.lower()
-
+ 
     if not (
         file_name_lower.endswith(".txt")
         or file_name_lower.endswith(".docx")
@@ -306,15 +320,15 @@ async def document_handler(
             parse_mode="Markdown"
         )
         return
-
+ 
     try:
         file = await context.bot.get_file(doc_file.file_id)
         os.makedirs("downloads", exist_ok=True)
         local_path = os.path.join("downloads", file_name)
-
+ 
         await file.download_to_drive(local_path)
         extracted_text = ""
-
+ 
         if file_name_lower.endswith(".txt"):
             with open(
                 local_path,
@@ -323,114 +337,114 @@ async def document_handler(
                 errors="ignore"
             ) as f:
                 extracted_text = f.read()
-
+ 
         elif file_name_lower.endswith(".docx"):
             doc = Document(local_path)
             extracted_text = "\n".join(
                 p.text for p in doc.paragraphs if p.text.strip()
             )
-
+ 
         if os.path.exists(local_path):
             os.remove(local_path)
-
+ 
         if not extracted_text.strip():
             await update.message.reply_text(
                 "❌ Fayl ichida tarjima qilish uchun matn topilmadi."
             )
             return
-
+ 
         if len(extracted_text) > 3000:
             extracted_text = (
                 extracted_text[:3000]
                 + "\n\n..."
             )
-
+ 
         context.user_data["text"] = extracted_text
         context.user_data["content_type"] = "document"
-
+ 
         await update.message.reply_text(
             f"📄 **Fayl qabul qilindi:** `{file_name}`\n\n"
             "🌐 Qaysi tilga tarjima qilay?",
             reply_markup=LANGUAGES_KEYBOARD,
             parse_mode="Markdown"
         )
-
+ 
     except Exception as e:
         print("Fayl xatosi:", e)
         await update.message.reply_text(
             "❌ Faylni qayta ishlashda xatolik yuz berdi."
         )
-
-
+ 
+ 
 # =========================================================
 # YANA TARJIMA
 # =========================================================
-
+ 
 async def again(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
     query = update.callback_query
     await query.answer()
-
+ 
     context.user_data.pop("text", None)
     context.user_data.pop("content_type", None)
-
+ 
     await query.edit_message_text(
         "✍️ Yangi so‘z, matn, hujjat yoki 📸 rasm yuboring."
     )
-
-
+ 
+ 
 # =========================================================
 # TILNI ALMASHTIRISH
 # =========================================================
-
+ 
 async def change_language(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
     query = update.callback_query
     await query.answer()
-
+ 
     await query.edit_message_text(
         "🌍 Qaysi tilga tarjima qilay?",
         reply_markup=LANGUAGES_KEYBOARD
     )
-
-
+ 
+ 
 # =========================================================
 # TARJIMA
 # =========================================================
-
+ 
 async def translate(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
     query = update.callback_query
     await query.answer()
-
+ 
     text = context.user_data.get("text")
     content_type = context.user_data.get("content_type", "text")
-
+ 
     if not text:
         await query.edit_message_text(
             "❌ Matn topilmadi.\n\n"
             "Iltimos, yangi matn, fayl yoki rasm yuboring."
         )
         return
-
+ 
     target_code = query.data
-
+ 
     if target_code not in names:
         await query.edit_message_text("❌ Noma'lum til tanlandi.")
         return
-
+ 
     try:
         translated = GoogleTranslator(
             source="auto",
             target=target_code
         ).translate(text)
-
+ 
         keyboard = [
             [
                 InlineKeyboardButton(
@@ -445,16 +459,16 @@ async def translate(
                 )
             ]
         ]
-
+ 
         reply_markup = InlineKeyboardMarkup(keyboard)
-
+ 
         if content_type == "image":
             source_title = "📸 Rasm ichidagi matn"
         elif content_type == "document":
             source_title = "📄 Fayldagi matn"
         else:
             source_title = "📝 Asl matn"
-
+ 
         if target_code == "ar":
             rtl = "\u200F"
             message_text = (
@@ -472,25 +486,49 @@ async def translate(
                 f"✅ **Tarjima:**\n"
                 f"{translated}"
             )
-
+ 
         await query.edit_message_text(
             message_text,
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
-
+ 
     except Exception as e:
         print("Tarjima xatosi:", e)
         await query.edit_message_text(
             "❌ Tarjima qilishda xatolik yuz berdi.\n\n"
             "Iltimos, qaytadan urinib ko‘ring."
         )
-
-
+ 
+ 
+# =========================================================
+# GLOBAL XATO USHLAGICH (YANGI)
+#
+# Bot ichida qayerdadir kutilmagan xato chiqsa, bu funksiya
+# uni ushlab, sizga (ADMIN_ID) shaxsiy xabar orqali yuboradi.
+# Shunda bot "jim" qolib, siz bexabar qolmaysiz.
+# =========================================================
+ 
+async def error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    print(f"⚠️ Botda xatolik yuz berdi: {context.error}")
+ 
+    try:
+        error_text = str(context.error)[:500]
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"⚠️ Botda kutilmagan xatolik:\n\n{error_text}"
+        )
+    except Exception as inner_error:
+        print("Admin'ga xato haqida xabar yuborib bo'lmadi:", inner_error)
+ 
+ 
 # =========================================================
 # BOT KOMANDALARI
 # =========================================================
-
+ 
 async def post_init(application: Application):
     commands = [
         BotCommand("start", "Botni qayta ishga tushirish 🚀"),
@@ -498,18 +536,18 @@ async def post_init(application: Application):
         BotCommand("stats", "Statistika 📊")
     ]
     await application.bot.set_my_commands(commands)
-
-
+ 
+ 
 # =========================================================
 # MAIN
 # =========================================================
-
+ 
 def main():
     if not TOKEN:
         print("❌ BOT_TOKEN topilmadi!")
         print("Render Environment Variables ichiga BOT_TOKEN qo‘shing.")
         return
-
+ 
     app = (
         Application
         .builder()
@@ -517,41 +555,45 @@ def main():
         .post_init(post_init)
         .build()
     )
-
+ 
     # START
     app.add_handler(CommandHandler("start", start))
-
+ 
     # HELP
     app.add_handler(CommandHandler("help", help_command))
-
+ 
     # STATS
     app.add_handler(CommandHandler("stats", stats))
-
+ 
     # RASM
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
-
+ 
     # HUJJAT
     app.add_handler(MessageHandler(filters.Document.ALL, document_handler))
-
+ 
     # MATN
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
-
+ 
     # YANA
     app.add_handler(CallbackQueryHandler(again, pattern="^again$"))
-
+ 
     # TIL ALMASHTIRISH
     app.add_handler(CallbackQueryHandler(change_language, pattern="^change_language$"))
-
+ 
     # TIL TANLASH
     app.add_handler(CallbackQueryHandler(translate, pattern="^(uz|en|ru|ko|tr|de|fr|ar|zh-CN)$"))
-
+ 
+    # GLOBAL XATO USHLAGICH (YANGI)
+    app.add_error_handler(error_handler)
+ 
     print("🤖 Tilchi bot muvaffaqiyatli ishga tushdi!")
     app.run_polling()
-
-
+ 
+ 
 # =========================================================
 # RUN
 # =========================================================
-
+ 
 if __name__ == "__main__":
     main()
+ 
