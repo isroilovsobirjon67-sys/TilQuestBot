@@ -24,6 +24,7 @@ from telegram.ext import (
 )
 
 from deep_translator import GoogleTranslator, MyMemoryTranslator
+from langdetect import detect
 from docx import Document
 
 
@@ -464,11 +465,18 @@ async def translate(
             print("GoogleTranslator xatosi:", e)
 
         # 2-urinish: agar Google ishlamasa, MyMemory xizmatiga o'tamiz
+        # MyMemory "auto" manba tilini qo'llab-quvvatlamaydi,
+        # shuning uchun tilni avval aniqlab olamiz.
         if translated is None:
             try:
+                try:
+                    detected_lang = detect(text)
+                except Exception:
+                    detected_lang = "en"
+
                 mymemory_code = target_code.split("-")[0]
                 result = MyMemoryTranslator(
-                    source="auto",
+                    source=detected_lang,
                     target=mymemory_code
                 ).translate(text)
 
