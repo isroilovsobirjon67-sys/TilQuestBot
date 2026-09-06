@@ -203,6 +203,22 @@ async def stats(
 
 
 # =========================================================
+# TOZALASH (/clear)
+# =========================================================
+
+async def clear(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    context.user_data.clear()
+
+    await update.message.reply_text(
+        "🧹 Tozalandi!\n\n"
+        "✍️ Endi yangi matn, hujjat yoki 📸 rasm yuboring."
+    )
+
+
+# =========================================================
 # ODDIY MATN
 # =========================================================
 
@@ -442,6 +458,7 @@ async def translate(
 
     try:
         translated = None
+        debug_errors = []
 
         def is_bad_result(result):
             return (
@@ -461,8 +478,11 @@ async def translate(
 
             if not is_bad_result(result):
                 translated = result
+            else:
+                debug_errors.append(f"Google: xato sahifasi qaytdi ({result[:80]})")
         except Exception as e:
             print("GoogleTranslator xatosi:", e)
+            debug_errors.append(f"Google: {e}")
 
         # 2-urinish: agar Google ishlamasa, MyMemory xizmatiga o'tamiz
         # MyMemory "auto" manba tilini qo'llab-quvvatlamaydi,
@@ -482,10 +502,22 @@ async def translate(
 
                 if not is_bad_result(result):
                     translated = result
+                else:
+                    debug_errors.append(f"MyMemory: xato sahifasi qaytdi ({result[:80]})")
             except Exception as e:
                 print("MyMemoryTranslator xatosi:", e)
+                debug_errors.append(f"MyMemory: {e}")
 
         if translated is None:
+            try:
+                debug_text = "\n".join(debug_errors) if debug_errors else "Sabab noma'lum"
+                await context.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=f"🔍 Tarjima ishlamadi. Sabablar:\n\n{debug_text}"
+                )
+            except Exception:
+                pass
+
             await query.edit_message_text(
                 "❌ Tarjima xizmatlari hozir javob bermayapti.\n\n"
                 "Iltimos, bir necha daqiqadan so‘ng qaytadan "
@@ -581,6 +613,7 @@ async def post_init(application: Application):
     commands = [
         BotCommand("start", "Botni qayta ishga tushirish 🚀"),
         BotCommand("help", "Yordam va yo‘riqnoma ℹ️"),
+        BotCommand("clear", "Saqlangan matnni tozalash 🧹"),
         BotCommand("stats", "Statistika 📊")
     ]
     await application.bot.set_my_commands(commands)
@@ -612,6 +645,9 @@ def main():
 
     # STATS
     app.add_handler(CommandHandler("stats", stats))
+
+    # CLEAR
+    app.add_handler(CommandHandler("clear", clear))
 
     # RASM
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
