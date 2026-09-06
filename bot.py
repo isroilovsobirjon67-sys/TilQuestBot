@@ -213,8 +213,15 @@ async def clear(
     context.user_data.clear()
 
     await update.message.reply_text(
-        "🧹 Tozalandi!\n\n"
-        "✍️ Endi yangi matn, hujjat yoki 📸 rasm yuboring."
+        "🧹 Tozalandi! Boshidan boshlaymiz.\n\n"
+        "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
+        "✨ Menga istalgan matnni, "
+        "**.txt / .docx** faylni yoki "
+        "📸 **rasmni** yuboring.\n\n"
+        "🌍 Men rasm ichidagi matnni ham "
+        "aniqlab, siz tanlagan tilga tarjima qilaman!",
+        reply_markup=LANGUAGES_KEYBOARD,
+        parse_mode="Markdown"
     )
 
 
