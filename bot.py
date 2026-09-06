@@ -1,5 +1,7 @@
 import os
 import json
+import time
+import asyncio
 import threading
 from io import BytesIO
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -455,6 +457,20 @@ async def translate(
     query = update.callback_query
     await query.answer()
 
+    # Juda tez-tez so'rov yuborilishining oldini olish
+    # (bu tarjima xizmatlarining bloklanish ehtimolini oshiradi)
+    now = time.time()
+    last_request = context.user_data.get("last_translate_time", 0)
+
+    if now - last_request < 3:
+        await query.answer(
+            "⏳ Biroz kuting, keyin qayta urinib ko'ring...",
+            show_alert=True
+        )
+        return
+
+    context.user_data["last_translate_time"] = now
+
     text = context.user_data.get("text")
     content_type = context.user_data.get("content_type", "text")
 
@@ -503,6 +519,7 @@ async def translate(
         # MyMemory "auto" manba tilini qo'llab-quvvatlamaydi,
         # shuning uchun tilni avval aniqlab olamiz.
         if translated is None:
+            await asyncio.sleep(1.5)
             try:
                 try:
                     detected_lang = detect(text)
@@ -510,10 +527,17 @@ async def translate(
                     detected_lang = "en"
 
                 mymemory_code = target_code.split("-")[0]
-                result = MyMemoryTranslator(
-                    source=detected_lang,
-                    target=mymemory_code
-                ).translate(text)
+
+                mymemory_kwargs = {
+                    "source": detected_lang,
+                    "target": mymemory_code
+                }
+
+                mymemory_email = os.environ.get("MYMEMORY_EMAIL")
+                if mymemory_email:
+                    mymemory_kwargs["email"] = mymemory_email
+
+                result = MyMemoryTranslator(**mymemory_kwargs).translate(text)
 
                 if not is_bad_result(result):
                     translated = result
@@ -691,3 +715,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
