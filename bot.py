@@ -138,10 +138,10 @@ LANGUAGES_KEYBOARD = get_language_keyboard()
 
 
 # =========================================================
-# XABAR ID KUZATUVI (/clear uchun)
+# XABAR ID KUZATUVI
 #
-# Har bir yuborilgan/kelgan xabarning ID'sini saqlab boramiz,
-# shunda /clear bosilganda ularning barchasini o'chira olamiz.
+# Har bir yuborilgan/kelgan xabarning ID'sini saqlab boramiz
+# (kelajakda kerak bo'lishi mumkin).
 # =========================================================
 
 def track_message(context: ContextTypes.DEFAULT_TYPE, message_id: int):
@@ -215,51 +215,6 @@ async def stats(
         await update.message.reply_text(
             "⚠️ Sizda bu komandadan foydalanish huquqi yo‘q."
         )
-
-
-# =========================================================
-# TOZALASH (/clear)
-# =========================================================
-
-async def clear(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    chat_id = update.effective_chat.id
-
-    # /clear buyrug'ining o'zini ham o'chirish ro'yxatiga qo'shamiz
-    track_message(context, update.message.message_id)
-
-    msg_ids = context.user_data.get("msg_ids", [])
-
-    for msg_id in msg_ids:
-        try:
-            await context.bot.delete_message(
-                chat_id=chat_id,
-                message_id=msg_id
-            )
-        except Exception:
-            # Xabar allaqachon o'chirilgan, 48 soatdan eski,
-            # yoki Telegram o'chirishga ruxsat bermagan bo'lishi
-            # mumkin — bunday hollarda shunchaki o'tkazib yuboramiz.
-            pass
-
-    context.user_data.clear()
-
-    sent = await context.bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
-            "✨ Menga istalgan matnni, "
-            "**.txt / .docx** faylni yoki "
-            "📸 **rasmni** yuboring.\n\n"
-            "🌍 Men rasm ichidagi matnni ham "
-            "aniqlab, siz tanlagan tilga tarjima qilaman!"
-        ),
-        reply_markup=LANGUAGES_KEYBOARD,
-        parse_mode="Markdown"
-    )
-    track_message(context, sent.message_id)
 
 
 # =========================================================
@@ -673,7 +628,6 @@ async def post_init(application: Application):
     commands = [
         BotCommand("start", "Botni qayta ishga tushirish 🚀"),
         BotCommand("help", "Yordam va yo‘riqnoma ℹ️"),
-        BotCommand("clear", "Saqlangan matnni tozalash 🧹"),
         BotCommand("stats", "Statistika 📊")
     ]
     await application.bot.set_my_commands(commands)
@@ -705,9 +659,6 @@ def main():
 
     # STATS
     app.add_handler(CommandHandler("stats", stats))
-
-    # CLEAR
-    app.add_handler(CommandHandler("clear", clear))
 
     # RASM
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
