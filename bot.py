@@ -138,6 +138,18 @@ LANGUAGES_KEYBOARD = get_language_keyboard()
 
 
 # =========================================================
+# XABAR ID KUZATUVI (/clear uchun)
+#
+# Har bir yuborilgan/kelgan xabarning ID'sini saqlab boramiz,
+# shunda /clear bosilganda ularning barchasini o'chira olamiz.
+# =========================================================
+
+def track_message(context: ContextTypes.DEFAULT_TYPE, message_id: int):
+    context.user_data.setdefault("msg_ids", [])
+    context.user_data["msg_ids"].append(message_id)
+
+
+# =========================================================
 # START
 # =========================================================
 
@@ -148,7 +160,9 @@ async def start(
     user_id = update.effective_user.id
     save_user(user_id)
 
-    await update.message.reply_text(
+    track_message(context, update.message.message_id)
+
+    sent = await update.message.reply_text(
         "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
         "✨ Menga istalgan matnni, "
         "**.txt / .docx** faylni yoki "
@@ -158,6 +172,7 @@ async def start(
         reply_markup=LANGUAGES_KEYBOARD,
         parse_mode="Markdown"
     )
+    track_message(context, sent.message_id)
 
 
 # =========================================================
@@ -210,19 +225,41 @@ async def clear(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    chat_id = update.effective_chat.id
+
+    # /clear buyrug'ining o'zini ham o'chirish ro'yxatiga qo'shamiz
+    track_message(context, update.message.message_id)
+
+    msg_ids = context.user_data.get("msg_ids", [])
+
+    for msg_id in msg_ids:
+        try:
+            await context.bot.delete_message(
+                chat_id=chat_id,
+                message_id=msg_id
+            )
+        except Exception:
+            # Xabar allaqachon o'chirilgan, 48 soatdan eski,
+            # yoki Telegram o'chirishga ruxsat bermagan bo'lishi
+            # mumkin — bunday hollarda shunchaki o'tkazib yuboramiz.
+            pass
+
     context.user_data.clear()
 
-    await update.message.reply_text(
-        "🧹 Tozalandi! Boshidan boshlaymiz.\n\n"
-        "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
-        "✨ Menga istalgan matnni, "
-        "**.txt / .docx** faylni yoki "
-        "📸 **rasmni** yuboring.\n\n"
-        "🌍 Men rasm ichidagi matnni ham "
-        "aniqlab, siz tanlagan tilga tarjima qilaman!",
+    sent = await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
+            "✨ Menga istalgan matnni, "
+            "**.txt / .docx** faylni yoki "
+            "📸 **rasmni** yuboring.\n\n"
+            "🌍 Men rasm ichidagi matnni ham "
+            "aniqlab, siz tanlagan tilga tarjima qilaman!"
+        ),
         reply_markup=LANGUAGES_KEYBOARD,
         parse_mode="Markdown"
     )
+    track_message(context, sent.message_id)
 
 
 # =========================================================
@@ -240,13 +277,16 @@ async def message_handler(
     if not text:
         return
 
+    track_message(context, update.message.message_id)
+
     context.user_data["text"] = text
     context.user_data["content_type"] = "text"
 
-    await update.message.reply_text(
+    sent = await update.message.reply_text(
         "🌐 Qaysi tilga tarjima qilay?",
         reply_markup=LANGUAGES_KEYBOARD
     )
+    track_message(context, sent.message_id)
 
 
 # =========================================================
@@ -260,10 +300,13 @@ async def photo_handler(
     user_id = update.effective_user.id
     save_user(user_id)
 
-    await update.message.reply_text(
+    track_message(context, update.message.message_id)
+
+    waiting = await update.message.reply_text(
         "📸 Rasm qabul qilindi.\n"
         "🔍 Rasm ichidagi matn aniqlanmoqda..."
     )
+    track_message(context, waiting.message_id)
 
     try:
         photo = update.message.photo[-1]
@@ -278,11 +321,12 @@ async def photo_handler(
         extracted_text = extracted_text.strip()
 
         if not extracted_text:
-            await update.message.reply_text(
+            sent = await update.message.reply_text(
                 "❌ Rasm ichidan matn topilmadi.\n\n"
                 "📸 Iltimos, matni aniqroq ko‘rinadigan "
                 "rasm yuboring."
             )
+            track_message(context, sent.message_id)
             return
 
         if len(extracted_text) > 3000:
@@ -294,7 +338,7 @@ async def photo_handler(
         context.user_data["text"] = extracted_text
         context.user_data["content_type"] = "image"
 
-        await update.message.reply_text(
+        sent = await update.message.reply_text(
             "✅ Rasm ichidagi matn aniqlandi!\n\n"
             "📝 **Topilgan matn:**\n\n"
             f"{extracted_text[:3500]}\n\n"
@@ -302,20 +346,23 @@ async def photo_handler(
             reply_markup=LANGUAGES_KEYBOARD,
             parse_mode="Markdown"
         )
+        track_message(context, sent.message_id)
 
     except pytesseract.TesseractNotFoundError:
         print("Tesseract topilmadi — Aptfile orqali o'rnatilganini tekshiring.")
-        await update.message.reply_text(
+        sent = await update.message.reply_text(
             "❌ Rasmdan matn olish xizmati hozircha ishlamayapti.\n\n"
             "Iltimos, keyinroq qayta urinib ko‘ring yoki matn/fayl yuboring."
         )
+        track_message(context, sent.message_id)
 
     except Exception as e:
         print("Rasm OCR xatosi:", e)
-        await update.message.reply_text(
+        sent = await update.message.reply_text(
             "❌ Rasmni o‘qishda xatolik yuz berdi.\n\n"
             "📸 Rasmni qaytadan yuborib ko‘ring."
         )
+        track_message(context, sent.message_id)
 
 
 # =========================================================
@@ -329,6 +376,8 @@ async def document_handler(
     user_id = update.effective_user.id
     save_user(user_id)
 
+    track_message(context, update.message.message_id)
+
     doc_file = update.message.document
     file_name = doc_file.file_name or "file"
     file_name_lower = file_name.lower()
@@ -337,12 +386,13 @@ async def document_handler(
         file_name_lower.endswith(".txt")
         or file_name_lower.endswith(".docx")
     ):
-        await update.message.reply_text(
+        sent = await update.message.reply_text(
             "❌ Kechirasiz, hozircha faqat "
             "**.txt** va **.docx** fayllarini "
             "qabul qilaman.",
             parse_mode="Markdown"
         )
+        track_message(context, sent.message_id)
         return
 
     try:
@@ -372,9 +422,10 @@ async def document_handler(
             os.remove(local_path)
 
         if not extracted_text.strip():
-            await update.message.reply_text(
+            sent = await update.message.reply_text(
                 "❌ Fayl ichida tarjima qilish uchun matn topilmadi."
             )
+            track_message(context, sent.message_id)
             return
 
         if len(extracted_text) > 3000:
@@ -386,18 +437,20 @@ async def document_handler(
         context.user_data["text"] = extracted_text
         context.user_data["content_type"] = "document"
 
-        await update.message.reply_text(
+        sent = await update.message.reply_text(
             f"📄 **Fayl qabul qilindi:** `{file_name}`\n\n"
             "🌐 Qaysi tilga tarjima qilay?",
             reply_markup=LANGUAGES_KEYBOARD,
             parse_mode="Markdown"
         )
+        track_message(context, sent.message_id)
 
     except Exception as e:
         print("Fayl xatosi:", e)
-        await update.message.reply_text(
+        sent = await update.message.reply_text(
             "❌ Faylni qayta ishlashda xatolik yuz berdi."
         )
+        track_message(context, sent.message_id)
 
 
 # =========================================================
