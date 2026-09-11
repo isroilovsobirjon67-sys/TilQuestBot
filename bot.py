@@ -1,7 +1,5 @@
 import os
 import json
-import time
-import asyncio
 import threading
 from io import BytesIO
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -25,8 +23,7 @@ from telegram.ext import (
     ContextTypes
 )
 
-from deep_translator import GoogleTranslator, MyMemoryTranslator
-from langdetect import detect
+from deep_translator import GoogleTranslator
 from docx import Document
 
 
@@ -90,13 +87,6 @@ names = {
 
 # =========================================================
 # FOYDALANUVCHILAR
-#
-# ESLATMA: Render bepul tarifida disk vaqtinchalik (ephemeral),
-# ya'ni bot qayta ishga tushganda (deploy/restart) bu fayl
-# o'chib ketishi mumkin va statistika reset bo'ladi.
-# Buni butunlay hal qilish uchun tashqi baza (masalan bepul
-# Supabase/PostgreSQL) kerak bo'ladi — xohlasangiz shuni ham
-# alohida sozlab beraman.
 # =========================================================
 
 def load_users():
@@ -140,18 +130,6 @@ LANGUAGES_KEYBOARD = get_language_keyboard()
 
 
 # =========================================================
-# XABAR ID KUZATUVI
-#
-# Har bir yuborilgan/kelgan xabarning ID'sini saqlab boramiz
-# (kelajakda kerak bo'lishi mumkin).
-# =========================================================
-
-def track_message(context: ContextTypes.DEFAULT_TYPE, message_id: int):
-    context.user_data.setdefault("msg_ids", [])
-    context.user_data["msg_ids"].append(message_id)
-
-
-# =========================================================
 # START
 # =========================================================
 
@@ -162,9 +140,7 @@ async def start(
     user_id = update.effective_user.id
     save_user(user_id)
 
-    track_message(context, update.message.message_id)
-
-    sent = await update.message.reply_text(
+    await update.message.reply_text(
         "👋 Salom! Men **Tilchi bot**'man. 🤖\n\n"
         "✨ Menga istalgan matnni, "
         "**.txt / .docx** faylni yoki "
@@ -174,7 +150,6 @@ async def start(
         reply_markup=LANGUAGES_KEYBOARD,
         parse_mode="Markdown"
     )
-    track_message(context, sent.message_id)
 
 
 # =========================================================
@@ -234,16 +209,13 @@ async def message_handler(
     if not text:
         return
 
-    track_message(context, update.message.message_id)
-
     context.user_data["text"] = text
     context.user_data["content_type"] = "text"
 
-    sent = await update.message.reply_text(
+    await update.message.reply_text(
         "🌐 Qaysi tilga tarjima qilay?",
         reply_markup=LANGUAGES_KEYBOARD
     )
-    track_message(context, sent.message_id)
 
 
 # =========================================================
@@ -257,13 +229,10 @@ async def photo_handler(
     user_id = update.effective_user.id
     save_user(user_id)
 
-    track_message(context, update.message.message_id)
-
-    waiting = await update.message.reply_text(
+    await update.message.reply_text(
         "📸 Rasm qabul qilindi.\n"
         "🔍 Rasm ichidagi matn aniqlanmoqda..."
     )
-    track_message(context, waiting.message_id)
 
     try:
         photo = update.message.photo[-1]
@@ -278,12 +247,11 @@ async def photo_handler(
         extracted_text = extracted_text.strip()
 
         if not extracted_text:
-            sent = await update.message.reply_text(
+            await update.message.reply_text(
                 "❌ Rasm ichidan matn topilmadi.\n\n"
                 "📸 Iltimos, matni aniqroq ko‘rinadigan "
                 "rasm yuboring."
             )
-            track_message(context, sent.message_id)
             return
 
         if len(extracted_text) > 3000:
@@ -295,7 +263,7 @@ async def photo_handler(
         context.user_data["text"] = extracted_text
         context.user_data["content_type"] = "image"
 
-        sent = await update.message.reply_text(
+        await update.message.reply_text(
             "✅ Rasm ichidagi matn aniqlandi!\n\n"
             "📝 **Topilgan matn:**\n\n"
             f"{extracted_text[:3500]}\n\n"
@@ -303,23 +271,13 @@ async def photo_handler(
             reply_markup=LANGUAGES_KEYBOARD,
             parse_mode="Markdown"
         )
-        track_message(context, sent.message_id)
-
-    except pytesseract.TesseractNotFoundError:
-        print("Tesseract topilmadi — Aptfile orqali o'rnatilganini tekshiring.")
-        sent = await update.message.reply_text(
-            "❌ Rasmdan matn olish xizmati hozircha ishlamayapti.\n\n"
-            "Iltimos, keyinroq qayta urinib ko‘ring yoki matn/fayl yuboring."
-        )
-        track_message(context, sent.message_id)
 
     except Exception as e:
         print("Rasm OCR xatosi:", e)
-        sent = await update.message.reply_text(
+        await update.message.reply_text(
             "❌ Rasmni o‘qishda xatolik yuz berdi.\n\n"
             "📸 Rasmni qaytadan yuborib ko‘ring."
         )
-        track_message(context, sent.message_id)
 
 
 # =========================================================
@@ -333,8 +291,6 @@ async def document_handler(
     user_id = update.effective_user.id
     save_user(user_id)
 
-    track_message(context, update.message.message_id)
-
     doc_file = update.message.document
     file_name = doc_file.file_name or "file"
     file_name_lower = file_name.lower()
@@ -343,13 +299,12 @@ async def document_handler(
         file_name_lower.endswith(".txt")
         or file_name_lower.endswith(".docx")
     ):
-        sent = await update.message.reply_text(
+        await update.message.reply_text(
             "❌ Kechirasiz, hozircha faqat "
             "**.txt** va **.docx** fayllarini "
             "qabul qilaman.",
             parse_mode="Markdown"
         )
-        track_message(context, sent.message_id)
         return
 
     try:
@@ -379,10 +334,9 @@ async def document_handler(
             os.remove(local_path)
 
         if not extracted_text.strip():
-            sent = await update.message.reply_text(
+            await update.message.reply_text(
                 "❌ Fayl ichida tarjima qilish uchun matn topilmadi."
             )
-            track_message(context, sent.message_id)
             return
 
         if len(extracted_text) > 3000:
@@ -394,20 +348,18 @@ async def document_handler(
         context.user_data["text"] = extracted_text
         context.user_data["content_type"] = "document"
 
-        sent = await update.message.reply_text(
+        await update.message.reply_text(
             f"📄 **Fayl qabul qilindi:** `{file_name}`\n\n"
             "🌐 Qaysi tilga tarjima qilay?",
             reply_markup=LANGUAGES_KEYBOARD,
             parse_mode="Markdown"
         )
-        track_message(context, sent.message_id)
 
     except Exception as e:
         print("Fayl xatosi:", e)
-        sent = await update.message.reply_text(
+        await update.message.reply_text(
             "❌ Faylni qayta ishlashda xatolik yuz berdi."
         )
-        track_message(context, sent.message_id)
 
 
 # =========================================================
@@ -457,20 +409,6 @@ async def translate(
     query = update.callback_query
     await query.answer()
 
-    # Juda tez-tez so'rov yuborilishining oldini olish
-    # (bu tarjima xizmatlarining bloklanish ehtimolini oshiradi)
-    now = time.time()
-    last_request = context.user_data.get("last_translate_time", 0)
-
-    if now - last_request < 3:
-        await query.answer(
-            "⏳ Biroz kuting, keyin qayta urinib ko'ring...",
-            show_alert=True
-        )
-        return
-
-    context.user_data["last_translate_time"] = now
-
     text = context.user_data.get("text")
     content_type = context.user_data.get("content_type", "text")
 
@@ -488,81 +426,10 @@ async def translate(
         return
 
     try:
-        translated = None
-        debug_errors = []
-
-        def is_bad_result(result):
-            return (
-                result is None
-                or "Error 500" in result
-                or "Server Error" in result
-                or "That's an error" in result
-                or len(result.strip()) == 0
-            )
-
-        # 1-urinish: Google Translate
-        try:
-            result = GoogleTranslator(
-                source="auto",
-                target=target_code
-            ).translate(text)
-
-            if not is_bad_result(result):
-                translated = result
-            else:
-                debug_errors.append(f"Google: xato sahifasi qaytdi ({result[:80]})")
-        except Exception as e:
-            print("GoogleTranslator xatosi:", e)
-            debug_errors.append(f"Google: {e}")
-
-        # 2-urinish: agar Google ishlamasa, MyMemory xizmatiga o'tamiz
-        # MyMemory "auto" manba tilini qo'llab-quvvatlamaydi,
-        # shuning uchun tilni avval aniqlab olamiz.
-        if translated is None:
-            await asyncio.sleep(1.5)
-            try:
-                try:
-                    detected_lang = detect(text)
-                except Exception:
-                    detected_lang = "en"
-
-                mymemory_code = target_code.split("-")[0]
-
-                mymemory_kwargs = {
-                    "source": detected_lang,
-                    "target": mymemory_code
-                }
-
-                mymemory_email = os.environ.get("MYMEMORY_EMAIL")
-                if mymemory_email:
-                    mymemory_kwargs["email"] = mymemory_email
-
-                result = MyMemoryTranslator(**mymemory_kwargs).translate(text)
-
-                if not is_bad_result(result):
-                    translated = result
-                else:
-                    debug_errors.append(f"MyMemory: xato sahifasi qaytdi ({result[:80]})")
-            except Exception as e:
-                print("MyMemoryTranslator xatosi:", e)
-                debug_errors.append(f"MyMemory: {e}")
-
-        if translated is None:
-            try:
-                debug_text = "\n".join(debug_errors) if debug_errors else "Sabab noma'lum"
-                await context.bot.send_message(
-                    chat_id=ADMIN_ID,
-                    text=f"🔍 Tarjima ishlamadi. Sabablar:\n\n{debug_text}"
-                )
-            except Exception:
-                pass
-
-            await query.edit_message_text(
-                "❌ Tarjima xizmatlari hozir javob bermayapti.\n\n"
-                "Iltimos, bir necha daqiqadan so‘ng qaytadan "
-                "urinib ko‘ring."
-            )
-            return
+        translated = GoogleTranslator(
+            source="auto",
+            target=target_code
+        ).translate(text)
 
         keyboard = [
             [
@@ -618,30 +485,6 @@ async def translate(
             "❌ Tarjima qilishda xatolik yuz berdi.\n\n"
             "Iltimos, qaytadan urinib ko‘ring."
         )
-
-
-# =========================================================
-# GLOBAL XATO USHLAGICH (YANGI)
-#
-# Bot ichida qayerdadir kutilmagan xato chiqsa, bu funksiya
-# uni ushlab, sizga (ADMIN_ID) shaxsiy xabar orqali yuboradi.
-# Shunda bot "jim" qolib, siz bexabar qolmaysiz.
-# =========================================================
-
-async def error_handler(
-    update: object,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    print(f"⚠️ Botda xatolik yuz berdi: {context.error}")
-
-    try:
-        error_text = str(context.error)[:500]
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"⚠️ Botda kutilmagan xatolik:\n\n{error_text}"
-        )
-    except Exception as inner_error:
-        print("Admin'ga xato haqida xabar yuborib bo'lmadi:", inner_error)
 
 
 # =========================================================
@@ -702,9 +545,6 @@ def main():
     # TIL TANLASH
     app.add_handler(CallbackQueryHandler(translate, pattern="^(uz|en|ru|ko|tr|de|fr|ar|zh-CN)$"))
 
-    # GLOBAL XATO USHLAGICH (YANGI)
-    app.add_error_handler(error_handler)
-
     print("🤖 Tilchi bot muvaffaqiyatli ishga tushdi!")
     app.run_polling()
 
@@ -715,17 +555,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
