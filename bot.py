@@ -165,14 +165,11 @@ async def game_command(
     await update.message.reply_game(game_short_name="vocab_quiz")
 
 
-async def game_callback_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+async def game_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query.game_short_name == "vocab_quiz":
-        # GitHub Pages orqali chiqqan o'yin havolangizni shu yerga yozasiz:
-        game_url = "https://foydalanuvchi_nomingiz.github.io/vocab-quiz/"
+        # GitHub Pages havolangizni shu yerga yozing
+        game_url = "https://isroilovsobirjon67-sys.github.io/TilQuestBot/"
         await query.answer(url=game_url)
 
 
