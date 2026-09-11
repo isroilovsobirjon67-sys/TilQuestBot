@@ -153,6 +153,30 @@ async def start(
 
 
 # =========================================================
+# GAME COMMAND
+# =========================================================
+
+async def game_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    user_id = update.effective_user.id
+    save_user(user_id)
+    await update.message.reply_game(game_short_name="vocab_quiz")
+
+
+async def game_callback_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+    if query.game_short_name == "vocab_quiz":
+        # GitHub Pages orqali chiqqan o'yin havolangizni shu yerga yozasiz:
+        game_url = "https://foydalanuvchi_nomingiz.github.io/vocab-quiz/"
+        await query.answer(url=game_url)
+
+
+# =========================================================
 # HELP
 # =========================================================
 
@@ -164,7 +188,8 @@ async def help_command(
         "ℹ️ **Yordam markazi:**\n\n"
         "💬 Matn yuboring.\n"
         "📄 `.txt` yoki `.docx` fayl yuboring.\n"
-        "📸 Rasm yuboring.\n\n"
+        "📸 Rasm yuboring.\n"
+        "🎮 `/game` orqali viktorina o'ynang.\n\n"
         "🔘 Keyin kerakli tilni tanlang.\n\n"
         "🤖 Rasm yuborsangiz, men rasm ichidagi "
         "matnni avtomatik aniqlayman va tarjima qilaman.",
@@ -494,6 +519,7 @@ async def translate(
 async def post_init(application: Application):
     commands = [
         BotCommand("start", "Botni qayta ishga tushirish 🚀"),
+        BotCommand("game", "Vocab Quiz o'yini 🎮"),
         BotCommand("help", "Yordam va yo‘riqnoma ℹ️"),
         BotCommand("stats", "Statistika 📊")
     ]
@@ -520,6 +546,10 @@ def main():
 
     # START
     app.add_handler(CommandHandler("start", start))
+
+    # GAME
+    app.add_handler(CommandHandler("game", game_command))
+    app.add_handler(CallbackQueryHandler(game_callback_handler, pattern="^(?!again$|change_language$|uz|en|ru|ko|tr|de|fr|ar|zh-CN$)"))
 
     # HELP
     app.add_handler(CommandHandler("help", help_command))
