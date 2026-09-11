@@ -1,1 +1,155 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocab Quiz & Daily Coins</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0f172a;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+        }
+        select { background: #334155; color: white; }
+        button { background: #3b82f6; color: white; cursor: pointer; font-weight: bold; }
+        button:hover { background: #2563eb; }
+        .stats { display: flex; justify-content: space-around; margin-bottom: 15px; font-weight: bold; }
+        .option-btn { background: #475569; margin: 5px 0; }
+        .option-btn:hover { background: #64748b; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
 
+<div class="container">
+    <!-- Til tanlash -->
+    <select id="langSelect" onchange="changeLanguage()">
+        <option value="uz">🇺🇿 O'zbekcha</option>
+        <option value="ru">🇷🇺 Русский</option>
+        <option value="en">🇬🇧 English</option>
+    </select>
+
+    <!-- Coin va Ballar -->
+    <div class="stats">
+        <div>🪙 Coin: <span id="coins">0</span></div>
+        <div>🏆 Ball: <span id="score">0</span></div>
+    </div>
+
+    <!-- Kunlik Bonus xabari -->
+    <div id="bonusMsg" style="color: #4ade80; margin-bottom: 10px; font-size: 14px;"></div>
+
+    <!-- O'yin qismi -->
+    <div id="quizContainer">
+        <h3 id="questionTitle">Savol</h3>
+        <div id="options"></div>
+    </div>
+    
+    <div id="resultContainer" class="hidden">
+        <h2 id="endMsg">Tugatildi!</h2>
+        <button onclick="restartQuiz()">Qayta o'ynash</button>
+    </div>
+</div>
+
+<script>
+    const translations = {
+        uz: { dailyBonus: "🎁 Kunlik bonus: +10 coin qo'shildi!", question: "So'zning ma'nosi nima?", finished: "O'yin yakunlandi!", restart: "Qayta o'ynash" },
+        ru: { dailyBonus: "🎁 Ежедневный бонус: +10 монет!", question: "Выберите перевод слова:", finished: "Игра окончена!", restart: "Играть снова" },
+        en: { dailyBonus: "🎁 Daily bonus: +10 coins added!", question: "What is the meaning of:", finished: "Game Over!", restart: "Play Again" }
+    };
+
+    let currentLang = "uz";
+    let coins = parseInt(localStorage.getItem("vocab_coins")) || 0;
+    let score = 0;
+    let currentQuestion = 0;
+
+    const questions = [
+        { word: "Apple", options: ["Olma", "Banan", "Nok", "Uzum"], answer: 0 },
+        { word: "Book", options: ["Qalam", "Kitob", Daftar, "Ruchka"], answer: 1 },
+        { word: "Sun", options: ["Oy", "Yulduz", "Quyosh", "Bulut"], answer: 2 }
+    ];
+
+    function checkDailyBonus() {
+        const lastLogin = localStorage.getItem("last_login");
+        const today = new Date().toDateString();
+        if (lastLogin !== today) {
+            coins += 10;
+            localStorage.setItem("vocab_coins", coins);
+            localStorage.setItem("last_login", today);
+            document.getElementById("bonusMsg").innerText = translations[currentLang].dailyBonus;
+        }
+        document.getElementById("coins").innerText = coins;
+    }
+
+    function changeLanguage() {
+        currentLang = document.getElementById("langSelect").value;
+        document.getElementById("questionTitle").innerText = translations[currentLang].question;
+        loadQuestion();
+    }
+
+    function loadQuestion() {
+        if (currentQuestion >= questions.length) {
+            document.getElementById("quizContainer").classList.add("hidden");
+            document.getElementById("resultContainer").classList.remove("hidden");
+            document.getElementById("endMsg").innerText = translations[currentLang].finished;
+            return;
+        }
+
+        let q = questions[currentQuestion];
+        document.getElementById("questionTitle").innerText = `${translations[currentLang].question} "${q.word}"`;
+        
+        let optHtml = "";
+        q.options.forEach((opt, index) => {
+            optHtml += `<button class="option-btn" onclick="checkAnswer(${index})">${opt}</button>`;
+        });
+        document.getElementById("options").innerHTML = optHtml;
+    }
+
+    function checkAnswer(selected) {
+        if (selected === questions[currentQuestion].answer) {
+            score += 10;
+            coins += 2;
+            document.getElementById("score").innerText = score;
+            document.getElementById("coins").innerText = coins;
+            localStorage.setItem("vocab_coins", coins);
+        }
+        currentQuestion++;
+        loadQuestion();
+    }
+
+    function restartQuiz() {
+        currentQuestion = 0;
+        score = 0;
+        document.getElementById("score").innerText = score;
+        document.getElementById("quizContainer").classList.remove("hidden");
+        document.getElementById("resultContainer").classList.add("hidden");
+        loadQuestion();
+    }
+
+    checkDailyBonus();
+    loadQuestion();
+</script>
+
+</body>
+</html>
