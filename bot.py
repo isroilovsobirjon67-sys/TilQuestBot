@@ -162,14 +162,23 @@ async def game_command(
 ):
     user_id = update.effective_user.id
     save_user(user_id)
-    await update.message.reply_game(game_short_name="vocab_quiz")
 
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "🎮 O'yinni boshlash",
+                url="https://isroilovsobirjon67-sys.github.io/TilQuestBot/"
+            )
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-async def game_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if query.game_short_name == "vocab_quiz":
-        game_url = "https://isroilovsobirjon67-sys.github.io/TilQuestBot/"
-        await query.answer(url=game_url)
+    await update.message.reply_text(
+        "🎮 **Vocab Quiz viktorina o'yini!**\n\n"
+        "Bilimingizni sinash uchun quyidagi tugmani bosing:",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
 
 
 # =========================================================
@@ -545,7 +554,6 @@ def main():
 
     # GAME
     app.add_handler(CommandHandler("game", game_command))
-    app.add_handler(CallbackQueryHandler(game_callback_handler, pattern="^(?!again$|change_language$|uz|en|ru|ko|tr|de|fr|ar|zh-CN$)"))
 
     # HELP
     app.add_handler(CommandHandler("help", help_command))
