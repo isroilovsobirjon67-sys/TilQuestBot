@@ -169,7 +169,7 @@ async def game_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     if query.game_short_name == "vocab_quiz":
         # GitHub Pages havolangizni shu yerga yozing
-        game_url = "https://isroilovsobirjon67-sys.github.io/TilQuestBot/"
+       game_url = "https://isroilovsobirjon67-sys.github.io/TilQuestBot/"
         await query.answer(url=game_url)
 
 
