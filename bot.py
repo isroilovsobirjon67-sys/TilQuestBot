@@ -3,6 +3,7 @@ import json
 import asyncio
 import threading
 import traceback
+import requests
 from io import BytesIO
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -27,6 +28,7 @@ from telegram.ext import (
 
 from deep_translator import GoogleTranslator
 from docx import Document
+from langdetect import detect
 
 
 # =========================================================
@@ -432,6 +434,95 @@ async def change_language(
 
 
 # =========================================================
+# TARJIMA YORDAMCHILARI (zaxira usullar bilan)
+# =========================================================
+
+def _split_text(text, limit):
+    chunks = []
+    current = ""
+    for line in text.split("\n"):
+        while len(line) > limit:
+            if current:
+                chunks.append(current)
+                current = ""
+            chunks.append(line[:limit])
+            line = line[limit:]
+        if current and len(current) + len(line) + 1 > limit:
+            chunks.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _translate_google(text, target):
+    return GoogleTranslator(source="auto", target=target).translate(text)
+
+
+def _translate_gtx(text, target):
+    out = []
+    for chunk in _split_text(text, 1500):
+        r = requests.post(
+            "https://translate.googleapis.com/translate_a/single",
+            params={"client": "gtx", "sl": "auto", "tl": target, "dt": "t"},
+            data={"q": chunk},
+            timeout=15
+        )
+        r.raise_for_status()
+        data = r.json()
+        out.append("".join(part[0] for part in data[0] if part and part[0]))
+    return "\n".join(out)
+
+
+def _translate_mymemory(text, target):
+    try:
+        source = detect(text)
+    except Exception:
+        source = "en"
+    if source.lower().startswith("zh"):
+        source = "zh-CN"
+    if source == target:
+        return text
+
+    out = []
+    for chunk in _split_text(text, 450):
+        r = requests.get(
+            "https://api.mymemory.translated.net/get",
+            params={"q": chunk, "langpair": f"{source}|{target}"},
+            timeout=15
+        )
+        r.raise_for_status()
+        data = r.json()
+        translated_chunk = (data.get("responseData") or {}).get("translatedText")
+        if not translated_chunk or str(data.get("responseStatus")) != "200":
+            raise RuntimeError(f"MyMemory: {data.get('responseDetails')}")
+        out.append(translated_chunk)
+    return "\n".join(out)
+
+
+def translate_text_sync(text, target):
+    methods = (
+        ("google", _translate_google),
+        ("gtx", _translate_gtx),
+        ("mymemory", _translate_mymemory),
+    )
+    errors = []
+    for name, fn in methods:
+        try:
+            result = fn(text, target)
+            if result and result.strip():
+                print(f"Tarjima manbasi: {name}")
+                return result
+            errors.append(f"{name}: bo'sh javob")
+        except Exception as e:
+            print(f"{name} xatosi:", repr(e))
+            errors.append(f"{name}: {e!r}")
+    raise RuntimeError("Barcha tarjima usullari ishlamadi: " + " | ".join(errors))
+
+
+# =========================================================
 # TARJIMA
 # =========================================================
 
@@ -459,27 +550,11 @@ async def translate(
         return
 
     try:
-        translated = None
-        last_error = None
-
-        for attempt in range(3):
-            try:
-                translated = await asyncio.to_thread(
-                    GoogleTranslator(
-                        source="auto",
-                        target=target_code
-                    ).translate,
-                    text
-                )
-                if translated:
-                    break
-            except Exception as e:
-                last_error = e
-                print(f"Tarjima urinish {attempt + 1} xatosi:", repr(e))
-                await asyncio.sleep(1.5)
-
-        if not translated:
-            raise last_error or RuntimeError("Tarjima bo'sh qaytdi")
+        translated = await asyncio.to_thread(
+            translate_text_sync,
+            text,
+            target_code
+        )
 
         keyboard = [
             [
@@ -526,10 +601,13 @@ async def translate(
 
     except Exception:
         traceback.print_exc()
-        await query.edit_message_text(
-            "❌ Tarjima qilishda xatolik yuz berdi.\n\n"
-            "Iltimos, qaytadan urinib ko‘ring."
-        )
+        try:
+            await query.edit_message_text(
+                "❌ Tarjima qilishda xatolik yuz berdi.\n\n"
+                "Iltimos, qaytadan urinib ko‘ring."
+            )
+        except Exception:
+            pass
 
 
 # =========================================================
