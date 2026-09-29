@@ -1,6 +1,8 @@
 import os
 import json
+import asyncio
 import threading
+import traceback
 from io import BytesIO
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -270,7 +272,8 @@ async def photo_handler(
         image_data = await file.download_as_bytearray()
         image = Image.open(BytesIO(image_data))
 
-        extracted_text = pytesseract.image_to_string(
+        extracted_text = await asyncio.to_thread(
+            pytesseract.image_to_string,
             image,
             lang="eng+rus"
         )
@@ -293,17 +296,17 @@ async def photo_handler(
         context.user_data["text"] = extracted_text
         context.user_data["content_type"] = "image"
 
+        # parse_mode ATAYLAB yo'q: OCR matnida maxsus belgilar bo'lishi mumkin
         await update.message.reply_text(
             "✅ Rasm ichidagi matn aniqlandi!\n\n"
-            "📝 **Topilgan matn:**\n\n"
+            "📝 Topilgan matn:\n\n"
             f"{extracted_text[:3500]}\n\n"
             "🌐 Endi qaysi tilga tarjima qilay?",
-            reply_markup=LANGUAGES_KEYBOARD,
-            parse_mode="Markdown"
+            reply_markup=LANGUAGES_KEYBOARD
         )
 
-    except Exception as e:
-        print("Rasm OCR xatosi:", e)
+    except Exception:
+        traceback.print_exc()
         await update.message.reply_text(
             "❌ Rasmni o‘qishda xatolik yuz berdi.\n\n"
             "📸 Rasmni qaytadan yuborib ko‘ring."
@@ -378,15 +381,15 @@ async def document_handler(
         context.user_data["text"] = extracted_text
         context.user_data["content_type"] = "document"
 
+        # parse_mode ATAYLAB yo'q: fayl nomida maxsus belgilar bo'lishi mumkin
         await update.message.reply_text(
-            f"📄 **Fayl qabul qilindi:** `{file_name}`\n\n"
+            f"📄 Fayl qabul qilindi: {file_name}\n\n"
             "🌐 Qaysi tilga tarjima qilay?",
-            reply_markup=LANGUAGES_KEYBOARD,
-            parse_mode="Markdown"
+            reply_markup=LANGUAGES_KEYBOARD
         )
 
-    except Exception as e:
-        print("Fayl xatosi:", e)
+    except Exception:
+        traceback.print_exc()
         await update.message.reply_text(
             "❌ Faylni qayta ishlashda xatolik yuz berdi."
         )
@@ -456,10 +459,27 @@ async def translate(
         return
 
     try:
-        translated = GoogleTranslator(
-            source="auto",
-            target=target_code
-        ).translate(text)
+        translated = None
+        last_error = None
+
+        for attempt in range(3):
+            try:
+                translated = await asyncio.to_thread(
+                    GoogleTranslator(
+                        source="auto",
+                        target=target_code
+                    ).translate,
+                    text
+                )
+                if translated:
+                    break
+            except Exception as e:
+                last_error = e
+                print(f"Tarjima urinish {attempt + 1} xatosi:", repr(e))
+                await asyncio.sleep(1.5)
+
+        if not translated:
+            raise last_error or RuntimeError("Tarjima bo'sh qaytdi")
 
         keyboard = [
             [
@@ -485,32 +505,27 @@ async def translate(
         else:
             source_title = "📝 Asl matn"
 
-        if target_code == "ar":
-            rtl = "\u200F"
-            message_text = (
-                f"{rtl}🇸🇦 {names[target_code]} tiliga tarjima:\n\n"
-                f"{rtl}{source_title}:\n"
-                f"{rtl}{text[:500]}\n\n"
-                f"{rtl}✅ **Tarjima:**\n"
-                f"{rtl}{translated}"
-            )
-        else:
-            message_text = (
-                f"🌐 **{names[target_code]} tiliga tarjima:**\n\n"
-                f"{source_title}:\n"
-                f"{text[:500]}\n\n"
-                f"✅ **Tarjima:**\n"
-                f"{translated}"
-            )
+        rtl = "\u200F" if target_code == "ar" else ""
 
-        await query.edit_message_text(
-            message_text,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
+        message_text = (
+            f"{rtl}🌐 {names[target_code]} tiliga tarjima:\n\n"
+            f"{rtl}{source_title}:\n"
+            f"{rtl}{text[:500]}\n\n"
+            f"{rtl}✅ Tarjima:\n"
+            f"{rtl}{translated}"
         )
 
-    except Exception as e:
-        print("Tarjima xatosi:", e)
+        if len(message_text) > 4000:
+            message_text = message_text[:4000] + "\n..."
+
+        # parse_mode ATAYLAB yo'q: maxsus belgilar xabarni buzmasligi uchun
+        await query.edit_message_text(
+            message_text,
+            reply_markup=reply_markup
+        )
+
+    except Exception:
+        traceback.print_exc()
         await query.edit_message_text(
             "❌ Tarjima qilishda xatolik yuz berdi.\n\n"
             "Iltimos, qaytadan urinib ko‘ring."
